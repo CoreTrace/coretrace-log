@@ -29,7 +29,7 @@ size_t g_prefix_len = 6;
 
 // ── Level filtering ──────────────────────
 
-int g_min_level = 0; // Level::Info
+int g_min_level = static_cast<int>(Level::Info);
 int g_min_level_set_explicitly = 0;
 
 // ── Module filtering ─────────────────────
@@ -158,6 +158,16 @@ struct PrefixSnapshot {
   return *a == *b;
 }
 
+[[nodiscard]] int parse_level_from_env(const char *value) {
+  if (cstr_ieq(value, "debug"))
+    return static_cast<int>(Level::Debug);
+  if (cstr_ieq(value, "warn"))
+    return static_cast<int>(Level::Warn);
+  if (cstr_ieq(value, "error"))
+    return static_cast<int>(Level::Error);
+  return static_cast<int>(Level::Info);
+}
+
 // ── Timestamp formatting ─────────────────
 
 // Writes ISO 8601 timestamp: [2025-01-15T10:45:23.456]
@@ -250,17 +260,13 @@ void add_module_locked(std::string_view name) {
 }
 
 void init_from_env() {
-  // CT_LOG_LEVEL=info|warn|error (default only, explicit API has priority)
+  // CT_LOG_LEVEL=debug|info|warn|error
+  // (startup default only, explicit API has priority)
   if (__atomic_load_n(&g_min_level_set_explicitly, __ATOMIC_ACQUIRE) == 0) {
     const char *env_level = getenv("CT_LOG_LEVEL");
-    if (env_level) {
-      if (cstr_ieq(env_level, "warn"))
-        __atomic_store_n(&g_min_level, 1, __ATOMIC_RELEASE);
-      else if (cstr_ieq(env_level, "error"))
-        __atomic_store_n(&g_min_level, 2, __ATOMIC_RELEASE);
-      else // "info" or anything else
-        __atomic_store_n(&g_min_level, 0, __ATOMIC_RELEASE);
-    }
+    if (env_level)
+      __atomic_store_n(&g_min_level, parse_level_from_env(env_level),
+                       __ATOMIC_RELEASE);
   }
 
   // CT_DEBUG=mod1,mod2,... (default only, explicit API has priority)
@@ -542,6 +548,8 @@ void set_source_location(bool enabled) {
 
 [[nodiscard]] std::string_view level_label(Level level) {
   switch (level) {
+  case Level::Debug:
+    return "DEBUG";
   case Level::Info:
     return "INFO";
   case Level::Warn:
@@ -554,6 +562,8 @@ void set_source_location(bool enabled) {
 
 [[nodiscard]] std::string_view level_color(Level level) {
   switch (level) {
+  case Level::Debug:
+    return color(Color::Cyan);
   case Level::Info:
     return color(Color::Green);
   case Level::Warn:

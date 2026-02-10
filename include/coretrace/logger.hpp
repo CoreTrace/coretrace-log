@@ -67,7 +67,7 @@ enum class Color {
 //  Level
 // #######################################
 
-enum class Level { Info = 0, Warn = 1, Error = 2 };
+enum class Level { Debug = 0, Info = 1, Warn = 2, Error = 3 };
 
 // #######################################
 //  LogEntry — captures Level + source_location
@@ -123,8 +123,9 @@ void set_prefix(std::string_view prefix);
 // #######################################
 
 /// Set the minimum log level. Messages below this level are silently dropped.
-/// Default: Level::Info (everything passes).
-/// Env var CT_LOG_LEVEL=info|warn|error is used as a startup default only.
+/// Default: Level::Info (Info, Warn, Error pass; Debug is filtered).
+/// Env var CT_LOG_LEVEL=debug|info|warn|error is used as a startup default
+/// only.
 /// Explicit API calls always take precedence.
 void set_min_level(Level level);
 
@@ -197,7 +198,7 @@ void set_source_location(bool enabled);
 /// Returns empty string_view when color output is disabled.
 [[nodiscard]] std::string_view color(Color c);
 
-/// Return the label string for a log level ("INFO", "WARN", "ERROR").
+/// Return the label string for a log level ("DEBUG", "INFO", "WARN", "ERROR").
 [[nodiscard]] std::string_view level_label(Level level);
 
 /// Return the color escape sequence for a log level.
