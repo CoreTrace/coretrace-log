@@ -1,6 +1,10 @@
-add_executable(coretrace_logger_test_api_precedence test_api_precedence.cpp)
+    add_executable(coretrace_logger_test_api_precedence test_api_precedence.cpp)
 target_link_libraries(coretrace_logger_test_api_precedence PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_api_precedence COMMAND coretrace_logger_test_api_precedence)
+
+add_executable(coretrace_logger_test_debug_level test_debug_level.cpp)
+target_link_libraries(coretrace_logger_test_debug_level PRIVATE coretrace_logger)
+add_test(NAME coretrace_logger.test_debug_level COMMAND coretrace_logger_test_debug_level)
 
 add_executable(coretrace_logger_test_module_filter test_module_filter.cpp)
 target_link_libraries(coretrace_logger_test_module_filter PRIVATE coretrace_logger)
