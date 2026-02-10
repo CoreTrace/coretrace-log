@@ -15,6 +15,9 @@ int main() {
   enable_logging();
 
   // ── 1. Basic logging ────────────────────────
+  set_min_level(Level::Debug);
+  log(Level::Debug, "Debug mode enabled\n");
+  set_min_level(Level::Info);
   log(Level::Info, "Logger initialized\n");
   log(Level::Warn, "This is a warning: value={}\n", 42);
   log(Level::Error, "Something went wrong!\n");
