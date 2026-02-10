@@ -18,6 +18,8 @@ A minimal, fast, and thread-safe C++20 logging library with colored terminal out
 int main()
 {
     coretrace::enable_logging();
+    coretrace::set_min_level(coretrace::Level::Debug); // optional
+    coretrace::log(coretrace::Level::Debug, "boot trace\n");
     coretrace::log(coretrace::Level::Info, "Hello {}\n", "world");
     coretrace::log(coretrace::Level::Warn, "count={}\n", 42);
     coretrace::log(coretrace::Level::Error, "disk full\n");
@@ -26,6 +28,7 @@ int main()
 
 Output:
 ```
+|12345| ==ct== [DEBUG] boot trace
 |12345| ==ct== [INFO] Hello world
 |12345| ==ct== [WARN] count=42
 |12345| ==ct== [ERROR] disk full
@@ -111,11 +114,13 @@ Uses `std::format` syntax. The `Level` is implicitly converted to a `LogEntry` t
 
 ```cpp
 coretrace::set_min_level(Level::Warn);  // Only Warn + Error pass
-coretrace::set_min_level(Level::Info);  // Everything passes (default)
+coretrace::set_min_level(Level::Info);  // Info + Warn + Error pass (default)
+coretrace::set_min_level(Level::Debug); // Debug + Info + Warn + Error pass
 ```
 
 Or via environment variable:
 ```bash
+CT_LOG_LEVEL=debug ./my_program    # Debug + Info + Warn + Error
 CT_LOG_LEVEL=error ./my_program    # Only errors
 CT_LOG_LEVEL=warn  ./my_program    # Warn + Error
 ```
@@ -212,7 +217,7 @@ coretrace::thread_id();                    // Platform-specific TID
 
 | Variable | Values | Description |
 |----------|--------|-------------|
-| `CT_LOG_LEVEL` | `info`, `warn`, `error` | Set startup default minimum log level |
+| `CT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` | Set startup default minimum log level |
 | `CT_DEBUG` | comma-separated names | Set startup default enabled modules |
 | `NO_COLOR` | any value | Disable ANSI color output |
 
@@ -226,7 +231,7 @@ Each field is optional:
 - **timestamp** : enabled via `set_timestamps(true)`
 - **PID** : always shown
 - **prefix** : configurable via `set_prefix()`
-- **LEVEL** : `INFO` (green), `WARN` (yellow), `ERROR` (red)
+- **LEVEL** : `DEBUG` (cyan), `INFO` (green), `WARN` (yellow), `ERROR` (red)
 - **file:line** : enabled via `set_source_location(true)`
 - **module** : shown when using the `Module()` overload
 
