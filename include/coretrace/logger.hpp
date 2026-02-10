@@ -8,73 +8,66 @@
 #include <string>
 #include <string_view>
 
-namespace coretrace
-{
+namespace coretrace {
 
 // #######################################
 //  Color
 // #######################################
 
-enum class Color
-{
-    Reset,
+enum class Color {
+  Reset,
 
-    Dim,
-    Bold,
-    Underline,
-    Italic,
-    Blink,
-    Reverse,
-    Hidden,
-    Strike,
+  Dim,
+  Bold,
+  Underline,
+  Italic,
+  Blink,
+  Reverse,
+  Hidden,
+  Strike,
 
-    Black,
-    Red,
-    Green,
-    Yellow,
-    Blue,
-    Magenta,
-    Cyan,
-    White,
+  Black,
+  Red,
+  Green,
+  Yellow,
+  Blue,
+  Magenta,
+  Cyan,
+  White,
 
-    Gray,
-    BrightRed,
-    BrightGreen,
-    BrightYellow,
-    BrightBlue,
-    BrightMagenta,
-    BrightCyan,
-    BrightWhite,
+  Gray,
+  BrightRed,
+  BrightGreen,
+  BrightYellow,
+  BrightBlue,
+  BrightMagenta,
+  BrightCyan,
+  BrightWhite,
 
-    BgBlack,
-    BgRed,
-    BgGreen,
-    BgYellow,
-    BgBlue,
-    BgMagenta,
-    BgCyan,
-    BgWhite,
+  BgBlack,
+  BgRed,
+  BgGreen,
+  BgYellow,
+  BgBlue,
+  BgMagenta,
+  BgCyan,
+  BgWhite,
 
-    BgGray,
-    BgBrightRed,
-    BgBrightGreen,
-    BgBrightYellow,
-    BgBrightBlue,
-    BgBrightMagenta,
-    BgBrightCyan,
-    BgBrightWhite,
+  BgGray,
+  BgBrightRed,
+  BgBrightGreen,
+  BgBrightYellow,
+  BgBrightBlue,
+  BgBrightMagenta,
+  BgBrightCyan,
+  BgBrightWhite,
 };
 
 // #######################################
 //  Level
 // #######################################
 
-enum class Level
-{
-    Info = 0,
-    Warn = 1,
-    Error = 2
-};
+enum class Level { Info = 0, Warn = 1, Error = 2 };
 
 // #######################################
 //  LogEntry — captures Level + source_location
@@ -83,17 +76,13 @@ enum class Level
 /// Implicitly convertible from Level so that the caller can write:
 ///   coretrace::log(Level::Info, "msg {}\n", val);
 /// and the source_location is captured at the call site.
-struct LogEntry
-{
-    Level level;
-    std::source_location loc;
+struct LogEntry {
+  Level level;
+  std::source_location loc;
 
-    // NOLINTNEXTLINE(google-explicit-constructor)
-    LogEntry(Level l, std::source_location loc = std::source_location::current())
-        : level(l)
-        , loc(loc)
-    {
-    }
+  // NOLINTNEXTLINE(google-explicit-constructor)
+  LogEntry(Level l, std::source_location loc = std::source_location::current())
+      : level(l), loc(loc) {}
 };
 
 // #######################################
@@ -105,12 +94,11 @@ struct LogEntry
 /// Example:
 ///   coretrace::log(Level::Info, Module("alloc"), "malloc size={}\n", 64);
 ///
-struct Module
-{
-    std::string_view name;
+struct Module {
+  std::string_view name;
 
-    explicit Module(std::string_view n) : name(n) {}
-    explicit Module(const char* n) : name(n) {}
+  explicit Module(std::string_view n) : name(n) {}
+  explicit Module(const char *n) : name(n) {}
 };
 
 // #######################################
@@ -176,7 +164,7 @@ void set_thread_safe(bool enabled);
 // #######################################
 
 /// Callback type for custom sinks.
-using SinkFn = void (*)(const char* data, size_t size);
+using SinkFn = void (*)(const char *data, size_t size);
 
 /// Redirect all log output to a custom sink function.
 /// Pass nullptr to revert to stderr (same as reset_sink()).
@@ -220,7 +208,7 @@ void set_source_location(bool enabled);
 // #######################################
 
 /// Write raw bytes to the current sink (stderr by default) with EINTR retry.
-void write_raw(const char* data, size_t size);
+void write_raw(const char *data, size_t size);
 
 /// Write a string_view to the current sink.
 void write_str(std::string_view value);
@@ -253,7 +241,7 @@ void write_hex(uintptr_t value);
 /// If module_name is non-empty, it is included in the prefix.
 /// Protected by the log mutex when thread safety is enabled.
 void write_log_line(Level level, std::string_view module_name,
-                    std::string_view message, const std::source_location& loc);
+                    std::string_view message, const std::source_location &loc);
 
 /// Lazy one-time initialization (env vars, etc.).
 void init_once();
@@ -271,28 +259,24 @@ void init_once();
 ///   coretrace::log(Level::Warn, "count={}\n", 42);
 ///
 template <typename... Args>
-inline void log(LogEntry entry, std::string_view fmt, Args&&... args)
-{
-    init_once();
+inline void log(LogEntry entry, std::string_view fmt, Args &&...args) {
+  init_once();
 
-    if (!log_is_enabled())
-        return;
-    if (static_cast<int>(entry.level) < static_cast<int>(min_level()))
-        return;
+  if (!log_is_enabled())
+    return;
+  if (static_cast<int>(entry.level) < static_cast<int>(min_level()))
+    return;
 
-    try
-    {
-        std::string msg = std::vformat(fmt, std::make_format_args(args...));
-        if (msg.empty())
-            return;
+  try {
+    std::string msg = std::vformat(fmt, std::make_format_args(args...));
+    if (msg.empty())
+      return;
 
-        write_log_line(entry.level, {}, msg, entry.loc);
-    }
-    catch (...)
-    {
-        static const char fallback[] = "coretrace: log format error\n";
-        write_raw(fallback, sizeof(fallback) - 1);
-    }
+    write_log_line(entry.level, {}, msg, entry.loc);
+  } catch (...) {
+    static const char fallback[] = "coretrace: log format error\n";
+    write_raw(fallback, sizeof(fallback) - 1);
+  }
 }
 
 /// Log a formatted message with a module tag.
@@ -302,30 +286,27 @@ inline void log(LogEntry entry, std::string_view fmt, Args&&... args)
 ///   coretrace::log(Level::Info, Module("alloc"), "malloc ptr={:p}\n", ptr);
 ///
 template <typename... Args>
-inline void log(LogEntry entry, Module mod, std::string_view fmt, Args&&... args)
-{
-    init_once();
+inline void log(LogEntry entry, Module mod, std::string_view fmt,
+                Args &&...args) {
+  init_once();
 
-    if (!log_is_enabled())
-        return;
-    if (static_cast<int>(entry.level) < static_cast<int>(min_level()))
-        return;
-    if (!mod.name.empty() && !module_is_enabled(mod.name))
-        return;
+  if (!log_is_enabled())
+    return;
+  if (static_cast<int>(entry.level) < static_cast<int>(min_level()))
+    return;
+  if (!mod.name.empty() && !module_is_enabled(mod.name))
+    return;
 
-    try
-    {
-        std::string msg = std::vformat(fmt, std::make_format_args(args...));
-        if (msg.empty())
-            return;
+  try {
+    std::string msg = std::vformat(fmt, std::make_format_args(args...));
+    if (msg.empty())
+      return;
 
-        write_log_line(entry.level, mod.name, msg, entry.loc);
-    }
-    catch (...)
-    {
-        static const char fallback[] = "coretrace: log format error\n";
-        write_raw(fallback, sizeof(fallback) - 1);
-    }
+    write_log_line(entry.level, mod.name, msg, entry.loc);
+  } catch (...) {
+    static const char fallback[] = "coretrace: log format error\n";
+    write_raw(fallback, sizeof(fallback) - 1);
+  }
 }
 
 } // namespace coretrace
