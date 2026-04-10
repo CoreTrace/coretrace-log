@@ -1,26 +1,25 @@
 #include "coretrace/logger.hpp"
 
+#include "logger_platform.hpp"
+
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
-#include <errno.h>
-#include <pthread.h>
-#include <time.h>
-#include <unistd.h>
-
-#if defined(__linux__)
-#include <sys/syscall.h>
-#endif
+#include <mutex>
+#include <string_view>
 
 namespace coretrace {
 
-// ####################################
-//  Global state
-// ####################################
-
 namespace {
+
+// ── Shared limits ─────────────────────────
+
+constexpr int MAX_MODULES = 32;
+constexpr int MODULE_NAME_LEN = 32;
+
 // ── Enable / Disable ─────────────────────
 
-int g_log_enabled = 0;
+std::atomic<int> g_log_enabled{0};
 
 // ── Prefix ───────────────────────────────
 
@@ -29,13 +28,10 @@ size_t g_prefix_len = 6;
 
 // ── Level filtering ──────────────────────
 
-int g_min_level = static_cast<int>(Level::Info);
-int g_min_level_set_explicitly = 0;
+std::atomic<int> g_min_level{static_cast<int>(Level::Info)};
+std::atomic<int> g_min_level_set_explicitly{0};
 
 // ── Module filtering ─────────────────────
-
-constexpr int MAX_MODULES = 32;
-constexpr int MODULE_NAME_LEN = 32;
 
 struct ModuleTable {
   char names[MAX_MODULES][MODULE_NAME_LEN];
@@ -44,38 +40,38 @@ struct ModuleTable {
 };
 
 ModuleTable g_modules{};
-int g_modules_set_explicitly = 0;
+std::atomic<int> g_modules_set_explicitly{0};
 
 // ── Synchronization ──────────────────────
 
 // Protects mutable logger state (prefix + modules table).
-pthread_mutex_t g_state_mutex = PTHREAD_MUTEX_INITIALIZER;
+std::mutex g_state_mutex;
 
 // Protects atomicity of one log line output when thread-safe mode is on.
-pthread_mutex_t g_output_mutex = PTHREAD_MUTEX_INITIALIZER;
-int g_thread_safe = 1; // enabled by default
+std::mutex g_output_mutex;
+std::atomic<int> g_thread_safe{1}; // enabled by default
 
 // ── Sink ─────────────────────────────────
 
-SinkFn g_sink = nullptr;
+std::atomic<SinkFn> g_sink{nullptr};
 
 // ── Timestamps ───────────────────────────
 
-int g_timestamps_enabled = 0;
+std::atomic<int> g_timestamps_enabled{0};
 
 // ── Source location ──────────────────────
 
-int g_source_location_enabled = 0;
+std::atomic<int> g_source_location_enabled{0};
 
 // ── Init ─────────────────────────────────
 
-pthread_once_t g_init_once = PTHREAD_ONCE_INIT;
+std::once_flag g_init_once;
 
 // ── Small lock guards ────────────────────
 
 struct StateLockGuard {
-  StateLockGuard() { pthread_mutex_lock(&g_state_mutex); }
-  ~StateLockGuard() { pthread_mutex_unlock(&g_state_mutex); }
+  StateLockGuard() { g_state_mutex.lock(); }
+  ~StateLockGuard() { g_state_mutex.unlock(); }
 
   StateLockGuard(const StateLockGuard &) = delete;
   StateLockGuard &operator=(const StateLockGuard &) = delete;
@@ -83,14 +79,14 @@ struct StateLockGuard {
 
 struct OutputLockGuard {
   OutputLockGuard()
-      : locked(__atomic_load_n(&g_thread_safe, __ATOMIC_ACQUIRE) != 0) {
+      : locked(g_thread_safe.load(std::memory_order_acquire) != 0) {
     if (locked)
-      pthread_mutex_lock(&g_output_mutex);
+      g_output_mutex.lock();
   }
 
   ~OutputLockGuard() {
     if (locked)
-      pthread_mutex_unlock(&g_output_mutex);
+      g_output_mutex.unlock();
   }
 
   OutputLockGuard(const OutputLockGuard &) = delete;
@@ -117,21 +113,31 @@ struct PrefixSnapshot {
   return snapshot;
 }
 
+// ── Environment ───────────────────────────
+
+[[nodiscard]] const char *env_var(const char *name) {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+  const char *value = std::getenv(name);
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+  return value;
+}
+
 // ── Color detection ──────────────────────
 
 [[nodiscard]] bool use_color() {
-  static int cached = -1;
+  static const bool enabled = []() {
+    if (env_var("NO_COLOR") != nullptr)
+      return false;
 
-  if (cached != -1)
-    return cached != 0;
+    return platform::stderr_supports_color();
+  }();
 
-  if (getenv("NO_COLOR") != nullptr) {
-    cached = 0;
-    return false;
-  }
-
-  cached = isatty(2) ? 1 : 0;
-  return cached != 0;
+  return enabled;
 }
 
 // ── String helpers ───────────────────────
@@ -159,6 +165,8 @@ struct PrefixSnapshot {
 }
 
 [[nodiscard]] int parse_level_from_env(const char *value) {
+  if (!value)
+    return static_cast<int>(Level::Info);
   if (cstr_ieq(value, "debug"))
     return static_cast<int>(Level::Debug);
   if (cstr_ieq(value, "warn"))
@@ -173,55 +181,49 @@ struct PrefixSnapshot {
 // Writes ISO 8601 timestamp: [2025-01-15T10:45:23.456]
 // Uses stack buffer, no heap allocation.
 void write_timestamp_to(char *buf, size_t &idx) {
-  struct timespec ts;
-  clock_gettime(CLOCK_REALTIME, &ts);
-
-  struct tm tm_buf;
-  gmtime_r(&ts.tv_sec, &tm_buf);
-
-  int millis = static_cast<int>(ts.tv_nsec / 1000000);
+  platform::UtcTimestamp ts{};
+  if (!platform::utc_timestamp(ts))
+    return;
 
   // [YYYY-MM-DDThh:mm:ss.mmm]
   buf[idx++] = '[';
 
   // Year
-  int year = tm_buf.tm_year + 1900;
-  buf[idx++] = static_cast<char>('0' + (year / 1000));
-  buf[idx++] = static_cast<char>('0' + (year / 100) % 10);
-  buf[idx++] = static_cast<char>('0' + (year / 10) % 10);
-  buf[idx++] = static_cast<char>('0' + year % 10);
+  buf[idx++] = static_cast<char>('0' + (ts.year / 1000));
+  buf[idx++] = static_cast<char>('0' + (ts.year / 100) % 10);
+  buf[idx++] = static_cast<char>('0' + (ts.year / 10) % 10);
+  buf[idx++] = static_cast<char>('0' + ts.year % 10);
   buf[idx++] = '-';
 
   // Month
-  int mon = tm_buf.tm_mon + 1;
-  buf[idx++] = static_cast<char>('0' + mon / 10);
-  buf[idx++] = static_cast<char>('0' + mon % 10);
+  buf[idx++] = static_cast<char>('0' + ts.month / 10);
+  buf[idx++] = static_cast<char>('0' + ts.month % 10);
   buf[idx++] = '-';
 
   // Day
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_mday / 10);
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_mday % 10);
+  buf[idx++] = static_cast<char>('0' + ts.day / 10);
+  buf[idx++] = static_cast<char>('0' + ts.day % 10);
   buf[idx++] = 'T';
 
   // Hour
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_hour / 10);
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_hour % 10);
+  buf[idx++] = static_cast<char>('0' + ts.hour / 10);
+  buf[idx++] = static_cast<char>('0' + ts.hour % 10);
   buf[idx++] = ':';
 
   // Minute
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_min / 10);
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_min % 10);
+  buf[idx++] = static_cast<char>('0' + ts.minute / 10);
+  buf[idx++] = static_cast<char>('0' + ts.minute % 10);
   buf[idx++] = ':';
 
   // Second
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_sec / 10);
-  buf[idx++] = static_cast<char>('0' + tm_buf.tm_sec % 10);
+  buf[idx++] = static_cast<char>('0' + ts.second / 10);
+  buf[idx++] = static_cast<char>('0' + ts.second % 10);
   buf[idx++] = '.';
 
   // Milliseconds
-  buf[idx++] = static_cast<char>('0' + millis / 100);
-  buf[idx++] = static_cast<char>('0' + (millis / 10) % 10);
-  buf[idx++] = static_cast<char>('0' + millis % 10);
+  buf[idx++] = static_cast<char>('0' + ts.millisecond / 100);
+  buf[idx++] = static_cast<char>('0' + (ts.millisecond / 10) % 10);
+  buf[idx++] = static_cast<char>('0' + ts.millisecond % 10);
 
   buf[idx++] = ']';
   buf[idx++] = ' ';
@@ -235,7 +237,7 @@ void write_timestamp_to(char *buf, size_t &idx) {
 
   const char *last = path;
   for (const char *p = path; *p; ++p) {
-    if (*p == '/')
+    if (*p == '/' || *p == '\\')
       last = p + 1;
   }
   return last;
@@ -262,16 +264,16 @@ void add_module_locked(std::string_view name) {
 void init_from_env() {
   // CT_LOG_LEVEL=debug|info|warn|error
   // (startup default only, explicit API has priority)
-  if (__atomic_load_n(&g_min_level_set_explicitly, __ATOMIC_ACQUIRE) == 0) {
-    const char *env_level = getenv("CT_LOG_LEVEL");
+  if (g_min_level_set_explicitly.load(std::memory_order_acquire) == 0) {
+    const char *env_level = env_var("CT_LOG_LEVEL");
     if (env_level)
-      __atomic_store_n(&g_min_level, parse_level_from_env(env_level),
-                       __ATOMIC_RELEASE);
+      g_min_level.store(parse_level_from_env(env_level),
+                        std::memory_order_release);
   }
 
   // CT_DEBUG=mod1,mod2,... (default only, explicit API has priority)
-  if (__atomic_load_n(&g_modules_set_explicitly, __ATOMIC_ACQUIRE) == 0) {
-    const char *env_debug = getenv("CT_DEBUG");
+  if (g_modules_set_explicitly.load(std::memory_order_acquire) == 0) {
+    const char *env_debug = env_var("CT_DEBUG");
     if (env_debug && env_debug[0] != '\0') {
       StateLockGuard guard;
 
@@ -298,20 +300,18 @@ void init_from_env() {
 //  Init
 // ####################################
 
-void init_once() { (void)pthread_once(&g_init_once, init_from_env); }
+void init_once() { std::call_once(g_init_once, init_from_env); }
 
 // ####################################
 //  Enable / Disable
 // ####################################
 
-void enable_logging() { __atomic_store_n(&g_log_enabled, 1, __ATOMIC_RELEASE); }
+void enable_logging() { g_log_enabled.store(1, std::memory_order_release); }
 
-void disable_logging() {
-  __atomic_store_n(&g_log_enabled, 0, __ATOMIC_RELEASE);
-}
+void disable_logging() { g_log_enabled.store(0, std::memory_order_release); }
 
 [[nodiscard]] bool log_is_enabled() {
-  return __atomic_load_n(&g_log_enabled, __ATOMIC_ACQUIRE) != 0;
+  return g_log_enabled.load(std::memory_order_acquire) != 0;
 }
 
 // ####################################
@@ -337,13 +337,13 @@ void set_prefix(std::string_view prefix) {
 // ####################################
 
 void set_min_level(Level level) {
-  __atomic_store_n(&g_min_level_set_explicitly, 1, __ATOMIC_RELEASE);
+  g_min_level_set_explicitly.store(1, std::memory_order_release);
   init_once();
-  __atomic_store_n(&g_min_level, static_cast<int>(level), __ATOMIC_RELEASE);
+  g_min_level.store(static_cast<int>(level), std::memory_order_release);
 }
 
 [[nodiscard]] Level min_level() {
-  return static_cast<Level>(__atomic_load_n(&g_min_level, __ATOMIC_ACQUIRE));
+  return static_cast<Level>(g_min_level.load(std::memory_order_acquire));
 }
 
 // ####################################
@@ -354,7 +354,7 @@ void enable_module(std::string_view name) {
   if (name.empty() || name.size() >= MODULE_NAME_LEN)
     return;
 
-  __atomic_store_n(&g_modules_set_explicitly, 1, __ATOMIC_RELEASE);
+  g_modules_set_explicitly.store(1, std::memory_order_release);
   init_once();
 
   StateLockGuard guard;
@@ -365,7 +365,7 @@ void disable_module(std::string_view name) {
   if (name.empty())
     return;
 
-  __atomic_store_n(&g_modules_set_explicitly, 1, __ATOMIC_RELEASE);
+  g_modules_set_explicitly.store(1, std::memory_order_release);
   init_once();
 
   StateLockGuard guard;
@@ -387,7 +387,7 @@ void disable_module(std::string_view name) {
 }
 
 void enable_all_modules() {
-  __atomic_store_n(&g_modules_set_explicitly, 1, __ATOMIC_RELEASE);
+  g_modules_set_explicitly.store(1, std::memory_order_release);
   init_once();
 
   StateLockGuard guard;
@@ -415,25 +415,23 @@ void enable_all_modules() {
 // ####################################
 
 void set_thread_safe(bool enabled) {
-  __atomic_store_n(&g_thread_safe, enabled ? 1 : 0, __ATOMIC_RELEASE);
+  g_thread_safe.store(enabled ? 1 : 0, std::memory_order_release);
 }
 
 // ####################################
 //  Sink
 // ####################################
 
-void set_sink(SinkFn fn) { __atomic_store_n(&g_sink, fn, __ATOMIC_RELEASE); }
+void set_sink(SinkFn fn) { g_sink.store(fn, std::memory_order_release); }
 
-void reset_sink() {
-  __atomic_store_n(&g_sink, static_cast<SinkFn>(nullptr), __ATOMIC_RELEASE);
-}
+void reset_sink() { g_sink.store(nullptr, std::memory_order_release); }
 
 // ####################################
 //  Timestamps
 // ####################################
 
 void set_timestamps(bool enabled) {
-  __atomic_store_n(&g_timestamps_enabled, enabled ? 1 : 0, __ATOMIC_RELEASE);
+  g_timestamps_enabled.store(enabled ? 1 : 0, std::memory_order_release);
 }
 
 // ####################################
@@ -441,8 +439,7 @@ void set_timestamps(bool enabled) {
 // ####################################
 
 void set_source_location(bool enabled) {
-  __atomic_store_n(&g_source_location_enabled, enabled ? 1 : 0,
-                   __ATOMIC_RELEASE);
+  g_source_location_enabled.store(enabled ? 1 : 0, std::memory_order_release);
 }
 
 // ####################################
@@ -579,24 +576,12 @@ void set_source_location(bool enabled) {
 // ####################################
 
 [[nodiscard]] int pid() {
-  static int cached = 0;
-
-  if (cached == 0)
-    cached = static_cast<int>(getpid());
-
+  static const int cached = platform::process_id();
   return cached;
 }
 
 [[nodiscard]] unsigned long long thread_id() {
-#if defined(__APPLE__)
-  uint64_t tid = 0;
-  (void)pthread_threadid_np(nullptr, &tid);
-  return static_cast<unsigned long long>(tid);
-#elif defined(__linux__)
-  return static_cast<unsigned long long>(syscall(SYS_gettid));
-#else
-  return reinterpret_cast<unsigned long long>(pthread_self());
-#endif
+  return platform::current_thread_id();
 }
 
 // ####################################
@@ -608,24 +593,13 @@ void write_raw(const char *data, size_t size) {
     return;
 
   // Custom sink?
-  SinkFn sink = __atomic_load_n(&g_sink, __ATOMIC_ACQUIRE);
+  SinkFn sink = g_sink.load(std::memory_order_acquire);
   if (sink) {
     sink(data, size);
     return;
   }
 
-  // Default: stderr (fd=2) with EINTR retry.
-  while (size > 0) {
-    ssize_t written = write(2, data, size);
-    if (written > 0) {
-      data += static_cast<size_t>(written);
-      size -= static_cast<size_t>(written);
-      continue;
-    }
-    if (written < 0 && errno == EINTR)
-      continue;
-    break;
-  }
+  platform::write_stderr(data, size);
 }
 
 void write_str(std::string_view value) {
@@ -725,7 +699,7 @@ void write_log_line(Level level, std::string_view module,
   OutputLockGuard output_lock;
 
   // Optional timestamp: [2025-01-15T10:45:23.456]
-  if (__atomic_load_n(&g_timestamps_enabled, __ATOMIC_ACQUIRE)) {
+  if (g_timestamps_enabled.load(std::memory_order_acquire)) {
     char ts_buf[32];
     size_t ts_idx = 0;
     write_timestamp_to(ts_buf, ts_idx);
@@ -755,7 +729,7 @@ void write_log_line(Level level, std::string_view module,
   write_str(color(Color::Reset));
 
   // Optional source location: file.cpp:42
-  if (__atomic_load_n(&g_source_location_enabled, __ATOMIC_ACQUIRE)) {
+  if (g_source_location_enabled.load(std::memory_order_acquire)) {
     write_raw(" ", 1);
     write_str(color(Color::Dim));
     const char *file = basename_of(loc.file_name());

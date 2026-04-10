@@ -83,8 +83,19 @@ target_link_libraries(my_target PRIVATE coretrace::logger)
 
 ## Requirements
 
-- C++20 compiler (Clang 16+, GCC 13+, AppleClang 15+)
-- POSIX (Linux, macOS) for `write(2)`, `pthread`, `clock_gettime`
+- C++20 compiler (Clang 16+, GCC 13+, AppleClang 15+, Visual Studio/MSVC)
+- Linux, macOS, or Windows
+
+## Windows build
+
+Native Windows builds work with Visual Studio 2022 and CMake:
+
+```powershell
+cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 `
+  -DCORETRACE_LOGGER_BUILD_TESTS=ON
+cmake --build build-win --config Release
+ctest --test-dir build-win -C Release --output-on-failure
+```
 
 ## API reference
 

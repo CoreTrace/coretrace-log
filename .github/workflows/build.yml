@@ -1,0 +1,80 @@
+# SPDX-License-Identifier: MIT
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-posix:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          brew install cmake ninja
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCORETRACE_LOGGER_BUILD_TESTS=ON \
+            -DCORETRACE_LOGGER_BUILD_EXAMPLES=ON
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          cmake --build build
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --output-on-failure
+
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          cmake -S . -B build-win -G "Visual Studio 17 2022" -A x64 `
+            -DCORETRACE_LOGGER_BUILD_TESTS=ON `
+            -DCORETRACE_LOGGER_BUILD_EXAMPLES=ON
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          cmake --build build-win --config Release
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ctest --test-dir build-win -C Release --output-on-failure
