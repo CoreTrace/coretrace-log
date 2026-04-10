@@ -125,10 +125,17 @@ struct PrefixSnapshot {
   if (cached != -1)
     return cached != 0;
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)  // MSVC warning: 'getenv': This function or variable may be unsafe
+#endif
   if (getenv("NO_COLOR") != nullptr) {
     cached = 0;
     return false;
   }
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
   cached = isatty(2) ? 1 : 0;
   return cached != 0;
@@ -263,7 +270,14 @@ void init_from_env() {
   // CT_LOG_LEVEL=debug|info|warn|error
   // (startup default only, explicit API has priority)
   if (__atomic_load_n(&g_min_level_set_explicitly, __ATOMIC_ACQUIRE) == 0) {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)  // MSVC warning: 'getenv': This function or variable may be unsafe
+#endif
     const char *env_level = getenv("CT_LOG_LEVEL");
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     if (env_level)
       __atomic_store_n(&g_min_level, parse_level_from_env(env_level),
                        __ATOMIC_RELEASE);
@@ -271,7 +285,14 @@ void init_from_env() {
 
   // CT_DEBUG=mod1,mod2,... (default only, explicit API has priority)
   if (__atomic_load_n(&g_modules_set_explicitly, __ATOMIC_ACQUIRE) == 0) {
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)  // MSVC warning: 'getenv': This function or variable may be unsafe
+#endif
     const char *env_debug = getenv("CT_DEBUG");
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
     if (env_debug && env_debug[0] != '\0') {
       StateLockGuard guard;
 

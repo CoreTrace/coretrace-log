@@ -9,12 +9,28 @@ std::string g_capture;
 
 void capture_sink(const char *data, size_t size) { g_capture.append(data, size); }
 
+void set_env_var(const char *key, const char *value) {
+#if defined(_WIN32)
+  (void)_putenv_s(key, value);
+#else
+  (void)setenv(key, value, 1);
+#endif
+}
+
+void unset_env_var(const char *key) {
+#if defined(_WIN32)
+  (void)_putenv_s(key, "");
+#else
+  (void)unsetenv(key);
+#endif
+}
+
 } // namespace
 
 int main() {
   using namespace coretrace;
 
-  setenv("CT_LOG_LEVEL", "debug", 1);
+  set_env_var("CT_LOG_LEVEL", "debug");
 
   set_sink(capture_sink);
   enable_logging();
@@ -27,7 +43,7 @@ int main() {
   log(Level::Info, "info still visible\n");
 
   reset_sink();
-  unsetenv("CT_LOG_LEVEL");
+  unset_env_var("CT_LOG_LEVEL");
 
   const bool has_debug_env = g_capture.find("debug via env") != std::string::npos;
   const bool has_debug_filtered =
