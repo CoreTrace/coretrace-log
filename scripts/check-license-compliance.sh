@@ -25,7 +25,7 @@ if [ -f "${WORKFLOW_FILE}" ]; then
     fi
 fi
 
-spdx_output="$(git -C "${REPO_ROOT}" grep -n "SPDX-License-Identifier:" -- . 2>/dev/null || true)"
+spdx_output="$(git -C "${REPO_ROOT}" grep -n -E "^[[:space:]]*(#|//|/\*)[[:space:]]*SPDX-License-Identifier:" -- . 2>/dev/null || true)"
 
 if [ -n "${spdx_output}" ]; then
     mismatches=()

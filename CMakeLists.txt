@@ -12,7 +12,14 @@ find_package(Threads REQUIRED)
 
 ### Library ###
 
-add_library(coretrace_logger STATIC src/logger.cpp)
+set(CORETRACE_LOGGER_SOURCES src/logger.cpp)
+if(WIN32)
+  list(APPEND CORETRACE_LOGGER_SOURCES src/logger_windows.cpp)
+else()
+  list(APPEND CORETRACE_LOGGER_SOURCES src/logger_posix.cpp)
+endif()
+
+add_library(coretrace_logger STATIC ${CORETRACE_LOGGER_SOURCES})
 
 target_include_directories(coretrace_logger
   PUBLIC
