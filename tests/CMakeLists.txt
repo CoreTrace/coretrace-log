@@ -14,3 +14,9 @@ add_executable(coretrace_logger_test_concurrency_smoke test_concurrency_smoke.cp
 target_link_libraries(coretrace_logger_test_concurrency_smoke PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_concurrency_smoke COMMAND coretrace_logger_test_concurrency_smoke)
 set_tests_properties(coretrace_logger.test_concurrency_smoke PROPERTIES TIMEOUT 20)
+
+if(UNIX)
+  add_test(NAME coretrace_logger.test_build_clean_guard
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_build_clean_guard.sh"
+      "${PROJECT_SOURCE_DIR}/scripts/build.sh")
+endif()
