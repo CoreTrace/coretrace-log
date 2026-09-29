@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <string>
 #include <string_view>
 
 namespace coretrace {
@@ -48,7 +49,7 @@ std::atomic<int> g_modules_set_explicitly{0};
 std::mutex g_state_mutex;
 
 // Protects atomicity of one log line output when thread-safe mode is on.
-std::mutex g_output_mutex;
+std::recursive_mutex g_output_mutex;
 std::atomic<int> g_thread_safe{1}; // enabled by default
 
 // ── Sink ─────────────────────────────────
@@ -698,63 +699,64 @@ void write_prefix(Level level) {
 void write_log_line(Level level, std::string_view module,
                     std::string_view message, const std::source_location &loc) {
   PrefixSnapshot prefix = read_prefix_snapshot();
-  OutputLockGuard output_lock;
+  std::string line;
 
   // Optional timestamp: [2025-01-15T10:45:23.456]
   if (g_timestamps_enabled.load(std::memory_order_acquire)) {
     char ts_buf[32];
     size_t ts_idx = 0;
     write_timestamp_to(ts_buf, ts_idx);
-    write_raw(ts_buf, ts_idx);
+    line.append(ts_buf, ts_idx);
   }
 
   // |PID|
-  write_str(color(Color::Dim));
-  write_raw("|", 1);
-  write_dec(static_cast<size_t>(pid()));
-  write_raw("|", 1);
-  write_str(color(Color::Reset));
-  write_raw(" ", 1);
+  line.append(color(Color::Dim));
+  line.push_back('|');
+  line.append(std::to_string(pid()));
+  line.push_back('|');
+  line.append(color(Color::Reset));
+  line.push_back(' ');
 
   // Configurable prefix tag.
-  write_str(color(Color::Gray));
-  write_str(color(Color::Italic));
-  write_raw(prefix.value, prefix.len);
-  write_raw(" ", 1);
-  write_str(color(Color::Reset));
+  line.append(color(Color::Gray));
+  line.append(color(Color::Italic));
+  line.append(prefix.value, prefix.len);
+  line.push_back(' ');
+  line.append(color(Color::Reset));
 
   // [LEVEL]
-  write_str(level_color(level));
-  write_raw("[", 1);
-  write_str(level_label(level));
-  write_raw("]", 1);
-  write_str(color(Color::Reset));
+  line.append(level_color(level));
+  line.push_back('[');
+  line.append(level_label(level));
+  line.push_back(']');
+  line.append(color(Color::Reset));
 
   // Optional source location: file.cpp:42
   if (g_source_location_enabled.load(std::memory_order_acquire)) {
-    write_raw(" ", 1);
-    write_str(color(Color::Dim));
+    line.push_back(' ');
+    line.append(color(Color::Dim));
     const char *file = basename_of(loc.file_name());
-    write_raw(file, std::strlen(file));
-    write_raw(":", 1);
-    write_dec(static_cast<size_t>(loc.line()));
-    write_str(color(Color::Reset));
+    line.append(file);
+    line.push_back(':');
+    line.append(std::to_string(loc.line()));
+    line.append(color(Color::Reset));
   }
 
   // Optional module tag: (alloc)
   if (!module.empty()) {
-    write_raw(" ", 1);
-    write_str(color(Color::Dim));
-    write_raw("(", 1);
-    write_raw(module.data(), module.size());
-    write_raw(")", 1);
-    write_str(color(Color::Reset));
+    line.push_back(' ');
+    line.append(color(Color::Dim));
+    line.push_back('(');
+    line.append(module);
+    line.push_back(')');
+    line.append(color(Color::Reset));
   }
 
-  write_raw(" ", 1);
+  line.push_back(' ');
+  line.append(message);
 
-  // Message body.
-  write_raw(message.data(), message.size());
+  OutputLockGuard output_lock;
+  write_raw(line.data(), line.size());
 }
 
 } // namespace coretrace
