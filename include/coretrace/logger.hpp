@@ -137,7 +137,8 @@ void set_min_level(Level level);
 // #######################################
 
 /// Enable a named module for logging. When at least one module is enabled,
-/// only log() calls that specify an enabled module will produce output.
+/// log() calls with a Module tag pass only for enabled names. Calls without
+/// a Module tag always pass the module filter.
 /// Module names are case-sensitive and stored in a fixed-size table.
 /// Env var CT_DEBUG=mod1,mod2,... is used as a startup default only.
 /// Explicit API calls always take precedence.
