@@ -26,10 +26,13 @@ int main() {
 
   log(Level::Info, Module("alloc"), "alloc accepted\n");
   log(Level::Info, Module("network"), "network filtered\n");
+  log(Level::Info, "untagged accepted\n");
 
   const bool alloc_seen = g_capture.find("alloc accepted") != std::string::npos;
   const bool network_seen =
       g_capture.find("network filtered") != std::string::npos;
+  const bool untagged_seen =
+      g_capture.find("untagged accepted") != std::string::npos;
 
   disable_module("alloc");
 
@@ -44,13 +47,15 @@ int main() {
 
   reset_sink();
 
-  if (!alloc_seen || network_seen || alloc_filtered_seen || !trace_seen) {
+  if (!alloc_seen || network_seen || !untagged_seen || alloc_filtered_seen ||
+      !trace_seen) {
     std::fprintf(stderr,
-                 "alloc_seen=%d network_seen=%d alloc_filtered_seen=%d "
+                 "alloc_seen=%d network_seen=%d untagged_seen=%d "
+                 "alloc_filtered_seen=%d "
                  "trace_seen=%d\\n%s\\n",
                  alloc_seen ? 1 : 0, network_seen ? 1 : 0,
-                 alloc_filtered_seen ? 1 : 0, trace_seen ? 1 : 0,
-                 g_capture.c_str());
+                 untagged_seen ? 1 : 0, alloc_filtered_seen ? 1 : 0,
+                 trace_seen ? 1 : 0, g_capture.c_str());
     return 1;
   }
 
