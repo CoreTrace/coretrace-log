@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 
 BUILD_DIR="build"
 BUILD_TYPE="Release"
@@ -130,12 +130,17 @@ if [ -z "$BUILD_DIR" ]; then
   die "Build directory cannot be empty"
 fi
 
-if [ "$BUILD_DIR" != /* ]; then
-  BUILD_DIR="${ROOT_DIR}/${BUILD_DIR}"
-fi
+case "$BUILD_DIR" in
+  /*) ;;
+  *) BUILD_DIR="${ROOT_DIR}/${BUILD_DIR}" ;;
+esac
 
 if [ "$CLEAN" -eq 1 ]; then
-  if [ "$BUILD_DIR" = "/" ] || [ "$BUILD_DIR" = "$ROOT_DIR" ]; then
+  mkdir -p "$BUILD_DIR"
+  resolved_build_dir="$(cd -P "$BUILD_DIR" && pwd -P)"
+  if [ "$resolved_build_dir" = "/" ] ||
+     [ "$resolved_build_dir" = "$ROOT_DIR" ] ||
+     [[ "$ROOT_DIR" == "$resolved_build_dir"/* ]]; then
     die "Refusing to clean build directory: $BUILD_DIR"
   fi
   note "Cleaning build directory: $BUILD_DIR"
