@@ -343,6 +343,7 @@ void set_min_level(Level level) {
 }
 
 [[nodiscard]] Level min_level() {
+  init_once();
   return static_cast<Level>(g_min_level.load(std::memory_order_acquire));
 }
 
@@ -396,6 +397,7 @@ void enable_all_modules() {
 }
 
 [[nodiscard]] bool module_is_enabled(std::string_view name) {
+  init_once();
   StateLockGuard guard;
 
   // If no filter is active, everything passes.
