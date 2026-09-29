@@ -2,6 +2,12 @@
 target_link_libraries(coretrace_logger_test_api_precedence PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_api_precedence COMMAND coretrace_logger_test_api_precedence)
 
+if(UNIX)
+  add_test(NAME coretrace_logger.test_build_without_llvm
+    COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_build_without_llvm.sh"
+      "${PROJECT_SOURCE_DIR}/scripts/build.sh")
+endif()
+
 add_executable(coretrace_logger_test_debug_level test_debug_level.cpp)
 target_link_libraries(coretrace_logger_test_debug_level PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_debug_level COMMAND coretrace_logger_test_debug_level)
