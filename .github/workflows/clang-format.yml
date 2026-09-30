@@ -12,11 +12,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install clang-format 19
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format-19
-          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-19 100
+      - name: Install clang-format 20
+        run: pipx install clang-format==20.1.8
 
       - name: Run format-check
         run: ./scripts/format-check.sh
