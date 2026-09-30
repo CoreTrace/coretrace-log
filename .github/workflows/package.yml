@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: MIT
+name: Package
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  consumer:
+    name: ${{ matrix.mode }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-2022]
+        mode: [find_package, add_subdirectory]
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install the library
+        if: matrix.mode == 'find_package'
+        run: |
+          set -euo pipefail
+          cmake -S . -B build \
+            -DCORETRACE_LOGGER_BUILD_TESTS=OFF \
+            -DCORETRACE_LOGGER_BUILD_EXAMPLES=OFF
+          cmake --build build --config Release
+          cmake --install build --config Release --prefix "$RUNNER_TEMP/install"
+
+      - name: Configure the consumer
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.mode }}" = find_package ]; then
+            cmake -S tests/consumer -B build-consumer \
+              -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/install"
+          else
+            cmake -S tests/consumer -B build-consumer \
+              -DCORETRACE_LOGGER_SOURCE_DIR="$GITHUB_WORKSPACE"
+          fi
+
+      - name: Build and run the consumer
+        run: |
+          set -euo pipefail
+          cmake --build build-consumer --config Release
+          ctest --test-dir build-consumer -C Release --output-on-failure
