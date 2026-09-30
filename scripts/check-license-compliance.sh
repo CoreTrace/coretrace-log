@@ -6,7 +6,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 EXPECTED_LICENSE="${EXPECTED_LICENSE:-MIT}"
 LICENSE_FILE="${LICENSE_FILE:-${REPO_ROOT}/LICENSE}"
-WORKFLOW_FILE="${WORKFLOW_FILE:-${REPO_ROOT}/.github/license-compliance.yml}"
+WORKFLOW_FILE="${WORKFLOW_FILE:-${REPO_ROOT}/.github/workflows/license-compliance.yml}"
 
 if [ ! -f "${LICENSE_FILE}" ]; then
     echo "License file not found: ${LICENSE_FILE}"
