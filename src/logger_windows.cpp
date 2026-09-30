@@ -56,7 +56,9 @@ void write_stderr(const char *data, size_t size) {
   }
 }
 
-[[nodiscard]] int process_id() { return static_cast<int>(GetCurrentProcessId()); }
+[[nodiscard]] int process_id() {
+  return static_cast<int>(GetCurrentProcessId());
+}
 
 [[nodiscard]] unsigned long long current_thread_id() {
   return static_cast<unsigned long long>(GetCurrentThreadId());
@@ -66,10 +68,9 @@ void write_stderr(const char *data, size_t size) {
   using clock = std::chrono::system_clock;
   const auto now = clock::now();
   const auto time = clock::to_time_t(now);
-  const auto millis =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          now.time_since_epoch()) %
-      1000;
+  const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          now.time_since_epoch()) %
+                      1000;
 
   std::tm tm_buf{};
   if (gmtime_s(&tm_buf, &time) != 0)
