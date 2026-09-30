@@ -1,25 +1,14 @@
+#include "check.hpp"
+
 #include <coretrace/logger.hpp>
 
-#include <cstdio>
-#include <cstdlib>
-
 int main() {
-#if defined(_WIN32)
-  if (_putenv_s("CT_LOG_LEVEL", "debug") != 0 ||
-      _putenv_s("CT_DEBUG", "selected") != 0)
-    return 1;
-#else
-  if (setenv("CT_LOG_LEVEL", "debug", 1) != 0 ||
-      setenv("CT_DEBUG", "selected", 1) != 0)
-    return 1;
-#endif
+  CHECK(ct_test::set_env("CT_LOG_LEVEL", "debug"));
+  CHECK(ct_test::set_env("CT_DEBUG", "selected"));
 
-  if (coretrace::min_level() != coretrace::Level::Debug ||
-      !coretrace::module_is_enabled("selected") ||
-      coretrace::module_is_enabled("other")) {
-    std::fprintf(stderr, "environment defaults were not loaded by getters\n");
-    return 1;
-  }
-
-  return 0;
+  // Getters must load the environment defaults before any log call or setter.
+  CHECK(coretrace::min_level() == coretrace::Level::Debug);
+  CHECK(coretrace::module_is_enabled("selected"));
+  CHECK(!coretrace::module_is_enabled("other"));
+  return ct_test::result();
 }

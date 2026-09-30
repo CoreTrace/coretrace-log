@@ -1,6 +1,7 @@
+#include "check.hpp"
+
 #include <coretrace/logger.hpp>
 
-#include <cstdio>
 #include <string>
 
 namespace {
@@ -24,10 +25,7 @@ int main() {
   coretrace::log(coretrace::Level::Error, "outer\n");
   coretrace::reset_sink();
 
-  if (captured.find("outer\n") == std::string::npos ||
-      captured.find("nested\n") == std::string::npos) {
-    std::fprintf(stderr, "reentrant sink did not receive both messages\n");
-    return 1;
-  }
-  return 0;
+  CHECK(captured.find("outer\n") != std::string::npos);
+  CHECK(captured.find("nested\n") != std::string::npos);
+  return ct_test::result();
 }
