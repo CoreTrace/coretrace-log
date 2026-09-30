@@ -33,6 +33,22 @@ int main() {
   CHECK(!logged("alloc filtered", before));
   CHECK(logged("trace accepted", before));
 
+  // Disabling the last enabled module must not let every module through.
+  disable_module("trace");
+  const size_t after_last = ct_test::captured.size();
+  log(Level::Info, Module("trace"), "trace filtered\n");
+  log(Level::Info, Module("network"), "network still filtered\n");
+
+  CHECK(!logged("trace filtered", after_last));
+  CHECK(!logged("network still filtered", after_last));
+  CHECK(!module_is_enabled("network"));
+
+  // Only enable_all_modules() clears the filter.
+  enable_all_modules();
+  log(Level::Info, Module("network"), "network accepted\n");
+
+  CHECK(logged("network accepted"));
+
   reset_sink();
   return ct_test::result();
 }
