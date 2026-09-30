@@ -759,4 +759,10 @@ void write_log_line(Level level, std::string_view module,
   write_raw(line.data(), line.size());
 }
 
+void write_format_error() {
+  static constexpr std::string_view message = "coretrace: log format error\n";
+  OutputLockGuard output_lock;
+  write_raw(message.data(), message.size());
+}
+
 } // namespace coretrace
