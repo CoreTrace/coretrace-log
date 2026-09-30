@@ -378,11 +378,9 @@ void disable_module(std::string_view name) {
       for (int j = i; j < g_modules.count - 1; ++j)
         std::memcpy(g_modules.names[j], g_modules.names[j + 1],
                     MODULE_NAME_LEN);
+      // The filter stays active even when no module is left: only
+      // enable_all_modules() clears it.
       g_modules.count--;
-
-      if (g_modules.count == 0)
-        g_modules.filter_active = 0;
-
       break;
     }
   }
