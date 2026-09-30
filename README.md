@@ -160,7 +160,7 @@ Or via environment variable:
 CT_DEBUG=alloc,trace ./my_program
 ```
 
-`CT_DEBUG` sets a startup default. Explicit module API calls always take precedence.
+`CT_DEBUG` sets a startup default. Spaces around names are ignored (`CT_DEBUG="alloc, trace"` works too). Explicit module API calls always take precedence.
 
 ### Timestamps
 
