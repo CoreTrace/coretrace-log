@@ -425,9 +425,13 @@ void set_thread_safe(bool enabled) {
 //  Sink
 // ####################################
 
-void set_sink(SinkFn fn) { g_sink.store(fn, std::memory_order_release); }
+void set_sink(SinkFn fn) {
+  // Wait for a line still being written, so the old sink is unused on return.
+  OutputLockGuard output_lock;
+  g_sink.store(fn, std::memory_order_release);
+}
 
-void reset_sink() { g_sink.store(nullptr, std::memory_order_release); }
+void reset_sink() { set_sink(nullptr); }
 
 // ####################################
 //  Timestamps

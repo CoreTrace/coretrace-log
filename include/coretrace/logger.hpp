@@ -170,9 +170,11 @@ using SinkFn = void (*)(const char *data, size_t size);
 
 /// Redirect all log output to a custom sink function.
 /// Pass nullptr to revert to stderr (same as reset_sink()).
+/// With thread safety enabled, waits for a line still being written: once it
+/// returns, log() no longer calls the previous sink.
 void set_sink(SinkFn fn);
 
-/// Revert to the default stderr sink.
+/// Revert to the default stderr sink. Waits like set_sink().
 void reset_sink();
 
 // #######################################
