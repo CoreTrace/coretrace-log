@@ -34,6 +34,11 @@ target_link_libraries(coretrace_logger_test_concurrency_smoke PRIVATE coretrace_
 add_test(NAME coretrace_logger.test_concurrency_smoke COMMAND coretrace_logger_test_concurrency_smoke)
 set_tests_properties(coretrace_logger.test_concurrency_smoke PROPERTIES TIMEOUT 20)
 
+add_executable(coretrace_logger_test_format_error_serialized test_format_error_serialized.cpp)
+target_link_libraries(coretrace_logger_test_format_error_serialized PRIVATE coretrace_logger)
+add_test(NAME coretrace_logger.test_format_error_serialized COMMAND coretrace_logger_test_format_error_serialized)
+set_tests_properties(coretrace_logger.test_format_error_serialized PROPERTIES TIMEOUT 20)
+
 if(UNIX)
   add_test(NAME coretrace_logger.test_build_clean_guard
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_build_clean_guard.sh"

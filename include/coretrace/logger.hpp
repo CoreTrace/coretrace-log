@@ -245,6 +245,10 @@ void write_hex(uintptr_t value);
 void write_log_line(Level level, std::string_view module_name,
                     std::string_view message, const std::source_location &loc);
 
+/// Write the format-error fallback message.
+/// Serialized with log lines when thread safety is enabled.
+void write_format_error();
+
 /// Lazy one-time initialization (env vars, etc.).
 void init_once();
 
@@ -276,8 +280,7 @@ inline void log(LogEntry entry, std::string_view fmt, Args &&...args) {
 
     write_log_line(entry.level, {}, msg, entry.loc);
   } catch (...) {
-    static const char fallback[] = "coretrace: log format error\n";
-    write_raw(fallback, sizeof(fallback) - 1);
+    write_format_error();
   }
 }
 
@@ -306,8 +309,7 @@ inline void log(LogEntry entry, Module mod, std::string_view fmt,
 
     write_log_line(entry.level, mod.name, msg, entry.loc);
   } catch (...) {
-    static const char fallback[] = "coretrace: log format error\n";
-    write_raw(fallback, sizeof(fallback) - 1);
+    write_format_error();
   }
 }
 
