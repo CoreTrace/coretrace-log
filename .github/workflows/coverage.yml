@@ -26,8 +26,10 @@ jobs:
       - name: Configure
         run: |
           set -euo pipefail
+          # Atomic counters: the multithreaded tests would otherwise corrupt
+          # them and gcov reports negative hits (GCC bug 68080).
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage"
 
       - name: Build
@@ -48,5 +50,7 @@ jobs:
             build/CMakeFiles/coretrace_logger.dir \
             build/CMakeFiles/coretrace_logger_example.dir \
             build/tests || status=$?
-          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+          if [ -f coverage.md ]; then
+            cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
           exit "$status"
