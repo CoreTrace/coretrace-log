@@ -46,3 +46,7 @@ if(TARGET coretrace_logger_example)
     PASS_REGULAR_EXPRESSION "\\[WARN\\] This WARN should appear"
     FAIL_REGULAR_EXPRESSION "should NOT appear")
 endif()
+
+# Compile-only: the build fails when a README example stops compiling.
+add_library(coretrace_logger_readme_snippets OBJECT readme_snippets.cpp)
+target_link_libraries(coretrace_logger_readme_snippets PRIVATE coretrace_logger)
