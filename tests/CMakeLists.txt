@@ -39,3 +39,10 @@ if(UNIX)
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_build_clean_guard.sh"
       "${PROJECT_SOURCE_DIR}/scripts/build.sh")
 endif()
+
+if(TARGET coretrace_logger_example)
+  add_test(NAME coretrace_logger.example COMMAND coretrace_logger_example)
+  set_tests_properties(coretrace_logger.example PROPERTIES
+    PASS_REGULAR_EXPRESSION "\\[WARN\\] This WARN should appear"
+    FAIL_REGULAR_EXPRESSION "should NOT appear")
+endif()
