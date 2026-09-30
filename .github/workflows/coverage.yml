@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: MIT
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Line coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++
+          pipx install gcovr==8.6
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          # Atomic counters: the multithreaded tests would otherwise corrupt
+          # them and gcov reports negative hits (GCC bug 68080).
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-update=atomic" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # Search only the library, example and test objects: CMake's compiler
+      # detection also leaves coverage data under build/CMakeFiles.
+      # The floor is the coverage measured with GCC 13 on 2026-09-30 (88.7% of
+      # lines). Raise it when coverage grows.
+      - name: Report
+        run: |
+          set -euo pipefail
+          status=0
+          gcovr --root . --filter src/ --filter include/ \
+            --print-summary --markdown-summary coverage.md \
+            --fail-under-line 88 \
+            build/CMakeFiles/coretrace_logger.dir \
+            build/CMakeFiles/coretrace_logger_example.dir \
+            build/tests || status=$?
+          if [ -f coverage.md ]; then
+            cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
