@@ -28,7 +28,9 @@ jobs:
         if: matrix.mode == 'find_package'
         run: |
           set -euo pipefail
-          cmake -S . -B build \
+          # A single-config build installs the per-config targets file only for
+          # its own build type, which must match --config below.
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
             -DCORETRACE_LOGGER_BUILD_TESTS=OFF \
             -DCORETRACE_LOGGER_BUILD_EXAMPLES=OFF
           cmake --build build --config Release
@@ -38,10 +40,10 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ matrix.mode }}" = find_package ]; then
-            cmake -S tests/consumer -B build-consumer \
+            cmake -S tests/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release \
               -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/install"
           else
-            cmake -S tests/consumer -B build-consumer \
+            cmake -S tests/consumer -B build-consumer -DCMAKE_BUILD_TYPE=Release \
               -DCORETRACE_LOGGER_SOURCE_DIR="$GITHUB_WORKSPACE"
           fi
 
