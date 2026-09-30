@@ -246,20 +246,23 @@ void write_timestamp_to(char *buf, size_t &idx) {
 
 // ── Module helpers (state lock required) ─
 
-void add_module_locked(std::string_view name) {
+// Returns false when the table is full.
+bool add_module_locked(std::string_view name) {
   // Check if already registered.
   for (int i = 0; i < g_modules.count; ++i) {
     if (sv_eq(name, std::string_view(g_modules.names[i])))
-      return;
+      return true;
   }
 
-  if (g_modules.count < MAX_MODULES) {
-    for (size_t i = 0; i < name.size(); ++i)
-      g_modules.names[g_modules.count][i] = name[i];
-    g_modules.names[g_modules.count][name.size()] = '\0';
-    g_modules.count++;
-    g_modules.filter_active = 1;
-  }
+  if (g_modules.count >= MAX_MODULES)
+    return false;
+
+  for (size_t i = 0; i < name.size(); ++i)
+    g_modules.names[g_modules.count][i] = name[i];
+  g_modules.names[g_modules.count][name.size()] = '\0';
+  g_modules.count++;
+  g_modules.filter_active = 1;
+  return true;
 }
 
 void init_from_env() {
@@ -352,15 +355,15 @@ void set_min_level(Level level) {
 //  Module filtering
 // ####################################
 
-void enable_module(std::string_view name) {
+bool enable_module(std::string_view name) {
   if (name.empty() || name.size() >= MODULE_NAME_LEN)
-    return;
+    return false;
 
   g_modules_set_explicitly.store(1, std::memory_order_release);
   init_once();
 
   StateLockGuard guard;
-  add_module_locked(name);
+  return add_module_locked(name);
 }
 
 void disable_module(std::string_view name) {
