@@ -41,7 +41,7 @@ Output:
 ```cmake
 include(FetchContent)
 FetchContent_Declare(coretrace-logger
-  GIT_REPOSITORY https://github.com/<your-org>/coretrace-logger.git
+  GIT_REPOSITORY https://github.com/CoreTrace/coretrace-log.git
   GIT_TAG        main
 )
 FetchContent_MakeAvailable(coretrace-logger)
@@ -183,8 +183,9 @@ Output:
 ### Custom sink
 
 ```cpp
-// Redirect to a file
-FILE* f = fopen("app.log", "w");
+// Redirect to a file. SinkFn is a plain function pointer, so the lambda
+// cannot capture: give the FILE* static storage duration instead.
+static FILE* f = fopen("app.log", "w");
 coretrace::set_sink([](const char* data, size_t size) {
     fwrite(data, 1, size, f);
 });
