@@ -151,6 +151,8 @@ coretrace::log(Level::Info, "no module = always printed\n");  // printed
 coretrace::enable_all_modules();  // Clear filter, everything passes
 ```
 
+`disable_module()` never lets more messages through: after the last enabled module is disabled, tagged messages stay filtered until `enable_all_modules()`.
+
 Or via environment variable:
 ```bash
 CT_DEBUG=alloc,trace ./my_program

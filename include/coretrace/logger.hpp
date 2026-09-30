@@ -136,15 +136,17 @@ void set_min_level(Level level);
 //  Module filtering
 // #######################################
 
-/// Enable a named module for logging. When at least one module is enabled,
-/// log() calls with a Module tag pass only for enabled names. Calls without
-/// a Module tag always pass the module filter.
+/// Enable a named module for logging. Once a module has been enabled, log()
+/// calls with a Module tag pass only for enabled names, until
+/// enable_all_modules() clears the filter. Calls without a Module tag always
+/// pass the module filter.
 /// Module names are case-sensitive and stored in a fixed-size table.
 /// Env var CT_DEBUG=mod1,mod2,... is used as a startup default only.
 /// Explicit API calls always take precedence.
 void enable_module(std::string_view name);
 
-/// Disable a previously enabled module.
+/// Disable a previously enabled module. The filter stays active, even when no
+/// module is left, so disabling a module never lets more messages through.
 void disable_module(std::string_view name);
 
 /// Clear the module filter so that all log() calls pass again.
