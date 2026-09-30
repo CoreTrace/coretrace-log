@@ -7,7 +7,9 @@ namespace {
 
 std::string g_capture;
 
-void capture_sink(const char *data, size_t size) { g_capture.append(data, size); }
+void capture_sink(const char *data, size_t size) {
+  g_capture.append(data, size);
+}
 
 void set_env_var(const char *key, const char *value) {
 #if defined(_WIN32)
@@ -45,10 +47,12 @@ int main() {
   reset_sink();
   unset_env_var("CT_LOG_LEVEL");
 
-  const bool has_debug_env = g_capture.find("debug via env") != std::string::npos;
+  const bool has_debug_env =
+      g_capture.find("debug via env") != std::string::npos;
   const bool has_debug_filtered =
       g_capture.find("debug filtered by info") != std::string::npos;
-  const bool has_info = g_capture.find("info still visible") != std::string::npos;
+  const bool has_info =
+      g_capture.find("info still visible") != std::string::npos;
 
   if (!has_debug_env || has_debug_filtered || !has_info)
     return 1;
