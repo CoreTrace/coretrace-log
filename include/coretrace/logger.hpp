@@ -125,7 +125,7 @@ void set_prefix(std::string_view prefix);
 /// Set the minimum log level. Messages below this level are silently dropped.
 /// Default: Level::Info (Info, Warn, Error pass; Debug is filtered).
 /// Env var CT_LOG_LEVEL=debug|info|warn|error is used as a startup default
-/// only.
+/// only. It is case-insensitive, and any other value means info.
 /// Explicit API calls always take precedence.
 void set_min_level(Level level);
 
@@ -163,7 +163,10 @@ void enable_all_modules();
 // #######################################
 
 /// Enable or disable mutex-based serialization of log output.
-/// Default: true (thread-safe). Set to false for single-threaded hot paths.
+/// Default: true (thread-safe). Each line then reaches the sink in one call,
+/// never concurrently with another line. The mutex is recursive, so a sink may
+/// itself call log(). Set to false for single-threaded hot paths: the sink can
+/// then be called concurrently, and set_sink() does not wait.
 void set_thread_safe(bool enabled);
 
 // #######################################
@@ -186,8 +189,8 @@ void reset_sink();
 //  Timestamps
 // #######################################
 
-/// Enable or disable ISO 8601 timestamps in the log prefix.
-/// Default: false.
+/// Enable or disable ISO 8601 timestamps (UTC, with milliseconds) in the log
+/// prefix. Default: false.
 void set_timestamps(bool enabled);
 
 // #######################################
@@ -217,6 +220,8 @@ void set_source_location(bool enabled);
 // #######################################
 
 /// Write raw bytes to the current sink (stderr by default) with EINTR retry.
+/// Like the other write_*() functions, it is not serialized with log() lines,
+/// even in thread-safe mode.
 void write_raw(const char *data, size_t size);
 
 /// Write a string_view to the current sink.
