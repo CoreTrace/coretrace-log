@@ -8,7 +8,7 @@ A minimal, fast, and thread-safe C++20 logging library with colored terminal out
 - ANSI color support with automatic detection and `NO_COLOR` compliance
 - Level filtering, module filtering, timestamps, source location
 - Custom sink support (redirect to file, buffer, syslog, etc.)
-- ~700 lines total
+- Small: about 1,300 lines, including the POSIX and Windows backends
 
 ## Quick start
 
@@ -42,7 +42,7 @@ Output:
 include(FetchContent)
 FetchContent_Declare(coretrace-logger
   GIT_REPOSITORY https://github.com/CoreTrace/coretrace-log.git
-  GIT_TAG        main
+  GIT_TAG        v1.1.0
 )
 FetchContent_MakeAvailable(coretrace-logger)
 
@@ -59,8 +59,8 @@ target_link_libraries(my_target PRIVATE coretrace::logger)
 ### Option 3 : install + find_package
 
 ```bash
-cd coretrace-logger && mkdir build && cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=/usr/local
+cd coretrace-log && mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local
 make -j && make install
 ```
 
@@ -121,6 +121,8 @@ coretrace::log(Level::Info, Module("alloc"), "malloc size={}\n", 64);
 
 Uses `std::format` syntax. The `Level` is implicitly converted to a `LogEntry` that captures `std::source_location` at the call site.
 
+The format string is checked at run time: an invalid one does not throw, and the line is replaced by `coretrace: log format error`. An empty message writes nothing.
+
 ### Level filtering
 
 ```cpp
@@ -136,7 +138,7 @@ CT_LOG_LEVEL=error ./my_program    # Only errors
 CT_LOG_LEVEL=warn  ./my_program    # Warn + Error
 ```
 
-`CT_LOG_LEVEL` sets a startup default. Explicit calls to `set_min_level()` always take precedence.
+`CT_LOG_LEVEL` sets a startup default. It is case-insensitive, and any other value means `info`. Explicit calls to `set_min_level()` always take precedence.
 
 ### Module filtering
 
@@ -168,7 +170,7 @@ CT_DEBUG=alloc,trace ./my_program
 coretrace::set_timestamps(true);
 ```
 
-Output:
+Output (UTC, with milliseconds):
 ```
 [2025-01-15T10:45:23.456] |12345| ==ct== [INFO] message
 ```
@@ -207,6 +209,8 @@ coretrace::set_thread_safe(true);   // Default: mutex-protected output
 coretrace::set_thread_safe(false);  // Disable for single-threaded hot paths
 ```
 
+In thread-safe mode, each line reaches the sink in a single call and never concurrently with another line. The mutex is recursive, so a sink may itself call `log()`, for example to report a write error. With `set_thread_safe(false)`, the sink can be called from several threads at once, and `set_sink()` no longer waits.
+
 ### Colors
 
 ```cpp
@@ -231,12 +235,14 @@ coretrace::pid();                          // Cached PID
 coretrace::thread_id();                    // Platform-specific TID
 ```
 
+These functions write straight to the sink: unlike `log()`, they are not serialized with other lines, even in thread-safe mode.
+
 ## Environment variables
 
 | Variable | Values | Description |
 |----------|--------|-------------|
-| `CT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` | Set startup default minimum log level |
-| `CT_DEBUG` | comma-separated names | Set startup default enabled modules |
+| `CT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` (case-insensitive) | Set startup default minimum log level. Other values mean `info` |
+| `CT_DEBUG` | comma-separated names | Set startup default enabled modules. Spaces around names are ignored |
 | `NO_COLOR` | any value | Disable ANSI color output |
 
 ## Output format
@@ -252,6 +258,20 @@ Each field is optional:
 - **LEVEL** : `DEBUG` (cyan), `INFO` (green), `WARN` (yellow), `ERROR` (red)
 - **file:line** : enabled via `set_source_location(true)`
 - **module** : shown when using the `Module()` overload
+
+## Development
+
+```bash
+cmake -S . -B build -G Ninja
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+- Format C++ files with `scripts/format.sh` (clang-format 20). CI runs `scripts/format-check.sh`.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/). `scripts/setup-dev.sh` installs a `commit-msg` hook that checks them.
+- CI builds and tests on Linux, macOS and Windows. It also runs the tests under ASan, UBSan and TSan, builds a project that consumes the installed package, enforces a line coverage floor, and checks formatting, license headers and commit messages.
+
+The [wiki](https://github.com/CoreTrace/coretrace-log/wiki) describes the test suite, the CI workflows and the release process.
 
 ## License
 
