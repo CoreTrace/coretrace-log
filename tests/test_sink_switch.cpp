@@ -1,6 +1,7 @@
+#include "check.hpp"
+
 #include <coretrace/logger.hpp>
 
-#include <cstdio>
 #include <string>
 
 namespace {
@@ -25,10 +26,8 @@ int main() {
   coretrace::log(coretrace::Level::Info, "whole line\n");
   coretrace::reset_sink();
 
-  if (first_output.find("whole line\n") == std::string::npos ||
-      !second_output.empty()) {
-    std::fprintf(stderr, "one line was split across two sinks\n");
-    return 1;
-  }
-  return 0;
+  // The whole line must reach the first sink, although it switches sinks.
+  CHECK(first_output.find("whole line\n") != std::string::npos);
+  CHECK(second_output.empty());
+  return ct_test::result();
 }

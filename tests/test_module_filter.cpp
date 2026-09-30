@@ -1,22 +1,14 @@
+#include "check.hpp"
+
 #include <coretrace/logger.hpp>
 
-#include <cstdio>
-#include <string>
-
-namespace {
-
-std::string g_capture;
-
-void capture_sink(const char *data, size_t size) {
-  g_capture.append(data, size);
-}
-
-} // namespace
+#include <cstddef>
 
 int main() {
   using namespace coretrace;
+  using ct_test::logged;
 
-  set_sink(capture_sink);
+  set_sink(ct_test::capture_sink);
   enable_logging();
   set_min_level(Level::Info);
 
@@ -28,36 +20,19 @@ int main() {
   log(Level::Info, Module("network"), "network filtered\n");
   log(Level::Info, "untagged accepted\n");
 
-  const bool alloc_seen = g_capture.find("alloc accepted") != std::string::npos;
-  const bool network_seen =
-      g_capture.find("network filtered") != std::string::npos;
-  const bool untagged_seen =
-      g_capture.find("untagged accepted") != std::string::npos;
+  CHECK(logged("alloc accepted"));
+  CHECK(!logged("network filtered"));
+  CHECK(logged("untagged accepted"));
 
   disable_module("alloc");
 
-  const size_t before = g_capture.size();
+  const size_t before = ct_test::captured.size();
   log(Level::Info, Module("alloc"), "alloc filtered\n");
   log(Level::Info, Module("trace"), "trace accepted\n");
 
-  const bool alloc_filtered_seen =
-      g_capture.find("alloc filtered", before) != std::string::npos;
-  const bool trace_seen =
-      g_capture.find("trace accepted", before) != std::string::npos;
+  CHECK(!logged("alloc filtered", before));
+  CHECK(logged("trace accepted", before));
 
   reset_sink();
-
-  if (!alloc_seen || network_seen || !untagged_seen || alloc_filtered_seen ||
-      !trace_seen) {
-    std::fprintf(stderr,
-                 "alloc_seen=%d network_seen=%d untagged_seen=%d "
-                 "alloc_filtered_seen=%d "
-                 "trace_seen=%d\\n%s\\n",
-                 alloc_seen ? 1 : 0, network_seen ? 1 : 0,
-                 untagged_seen ? 1 : 0, alloc_filtered_seen ? 1 : 0,
-                 trace_seen ? 1 : 0, g_capture.c_str());
-    return 1;
-  }
-
-  return 0;
+  return ct_test::result();
 }
