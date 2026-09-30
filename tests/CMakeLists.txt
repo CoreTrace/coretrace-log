@@ -1,24 +1,41 @@
-    add_executable(coretrace_logger_test_api_precedence test_api_precedence.cpp)
-target_link_libraries(coretrace_logger_test_api_precedence PRIVATE coretrace_logger)
-add_test(NAME coretrace_logger.test_api_precedence COMMAND coretrace_logger_test_api_precedence)
-
 if(UNIX)
   add_test(NAME coretrace_logger.test_build_without_llvm
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_build_without_llvm.sh"
       "${PROJECT_SOURCE_DIR}/scripts/build.sh")
 endif()
 
-add_executable(coretrace_logger_test_debug_level test_debug_level.cpp)
-target_link_libraries(coretrace_logger_test_debug_level PRIVATE coretrace_logger)
-add_test(NAME coretrace_logger.test_debug_level COMMAND coretrace_logger_test_debug_level)
+# One process per environment scenario: ctest sets the variables before the
+# logger reads them at startup, as a user would in the shell.
+add_executable(coretrace_logger_test_env test_env.cpp)
+target_link_libraries(coretrace_logger_test_env PRIVATE coretrace_logger)
 
-add_executable(coretrace_logger_test_env_getters test_env_getters.cpp)
-target_link_libraries(coretrace_logger_test_env_getters PRIVATE coretrace_logger)
-add_test(NAME coretrace_logger.test_env_getters COMMAND coretrace_logger_test_env_getters)
+function(coretrace_logger_add_env_test scenario environment)
+  add_test(NAME coretrace_logger.test_env.${scenario}
+    COMMAND coretrace_logger_test_env ${scenario})
+  set_tests_properties(coretrace_logger.test_env.${scenario}
+    PROPERTIES ENVIRONMENT "${environment}")
+endfunction()
 
-add_executable(coretrace_logger_test_env_module_list test_env_module_list.cpp)
-target_link_libraries(coretrace_logger_test_env_module_list PRIVATE coretrace_logger)
-add_test(NAME coretrace_logger.test_env_module_list COMMAND coretrace_logger_test_env_module_list)
+coretrace_logger_add_env_test(level_debug "CT_LOG_LEVEL=debug")
+coretrace_logger_add_env_test(level_warn "CT_LOG_LEVEL=warn")
+coretrace_logger_add_env_test(level_error "CT_LOG_LEVEL=error")
+coretrace_logger_add_env_test(level_uppercase "CT_LOG_LEVEL=DEBUG")
+coretrace_logger_add_env_test(level_invalid "CT_LOG_LEVEL=verbose")
+coretrace_logger_add_env_test(level_api_wins "CT_LOG_LEVEL=debug")
+coretrace_logger_add_env_test(getters "CT_LOG_LEVEL=debug;CT_DEBUG=selected")
+coretrace_logger_add_env_test(debug_list "CT_DEBUG= alloc ,,\ttrace\t, ")
+coretrace_logger_add_env_test(debug_too_long
+  "CT_DEBUG=alloc,xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,trace")
+coretrace_logger_add_env_test(debug_api_wins "CT_DEBUG=alloc")
+
+add_executable(coretrace_logger_test_stderr_sink test_stderr_sink.cpp)
+target_link_libraries(coretrace_logger_test_stderr_sink PRIVATE coretrace_logger)
+add_test(NAME coretrace_logger.test_stderr_sink COMMAND coretrace_logger_test_stderr_sink)
+# PASS_REGULAR_EXPRESSION ignores the exit code, so failed checks fail the test
+# through FAIL_REGULAR_EXPRESSION instead.
+set_tests_properties(coretrace_logger.test_stderr_sink PROPERTIES
+  PASS_REGULAR_EXPRESSION "\\[INFO\\] to stderr[\r\n]+[^\r\n]*\\[INFO\\] back to stderr"
+  FAIL_REGULAR_EXPRESSION "captured only;CHECK\\(")
 
 add_executable(coretrace_logger_test_module_filter test_module_filter.cpp)
 target_link_libraries(coretrace_logger_test_module_filter PRIVATE coretrace_logger)
@@ -45,6 +62,11 @@ add_executable(coretrace_logger_test_concurrency_smoke test_concurrency_smoke.cp
 target_link_libraries(coretrace_logger_test_concurrency_smoke PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_concurrency_smoke COMMAND coretrace_logger_test_concurrency_smoke)
 set_tests_properties(coretrace_logger.test_concurrency_smoke PROPERTIES TIMEOUT 20)
+
+add_executable(coretrace_logger_test_concurrent_lines test_concurrent_lines.cpp)
+target_link_libraries(coretrace_logger_test_concurrent_lines PRIVATE coretrace_logger)
+add_test(NAME coretrace_logger.test_concurrent_lines COMMAND coretrace_logger_test_concurrent_lines)
+set_tests_properties(coretrace_logger.test_concurrent_lines PROPERTIES TIMEOUT 20)
 
 add_executable(coretrace_logger_test_format_error_serialized test_format_error_serialized.cpp)
 target_link_libraries(coretrace_logger_test_format_error_serialized PRIVATE coretrace_logger)
