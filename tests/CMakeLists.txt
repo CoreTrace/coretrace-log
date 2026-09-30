@@ -49,6 +49,18 @@ add_executable(coretrace_logger_test_unit test_unit.cpp)
 target_link_libraries(coretrace_logger_test_unit PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_unit COMMAND coretrace_logger_test_unit)
 
+if(UNIX)
+  # Colors need a terminal on stderr: the test attaches a pseudo-terminal. The
+  # color decision is cached per process, so each case runs in its own process.
+  add_executable(coretrace_logger_test_colors_tty test_colors_tty.cpp)
+  target_link_libraries(coretrace_logger_test_colors_tty PRIVATE coretrace_logger)
+  add_test(NAME coretrace_logger.test_colors_tty COMMAND coretrace_logger_test_colors_tty)
+  add_test(NAME coretrace_logger.test_colors_tty.no_color
+    COMMAND coretrace_logger_test_colors_tty no_color)
+  set_tests_properties(coretrace_logger.test_colors_tty.no_color
+    PROPERTIES ENVIRONMENT "NO_COLOR=1")
+endif()
+
 add_executable(coretrace_logger_test_sink_reentrancy test_sink_reentrancy.cpp)
 target_link_libraries(coretrace_logger_test_sink_reentrancy PRIVATE coretrace_logger)
 add_test(NAME coretrace_logger.test_sink_reentrancy COMMAND coretrace_logger_test_sink_reentrancy)
