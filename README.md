@@ -194,6 +194,8 @@ coretrace::set_sink([](const char* data, size_t size) {
 coretrace::reset_sink();
 ```
 
+With thread safety enabled (the default), `set_sink()` and `reset_sink()` wait for a line still being written. Once they return, `log()` no longer calls the previous sink, so its file can be closed.
+
 ### Thread safety
 
 ```cpp

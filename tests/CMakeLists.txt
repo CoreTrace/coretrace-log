@@ -39,6 +39,11 @@ target_link_libraries(coretrace_logger_test_format_error_serialized PRIVATE core
 add_test(NAME coretrace_logger.test_format_error_serialized COMMAND coretrace_logger_test_format_error_serialized)
 set_tests_properties(coretrace_logger.test_format_error_serialized PROPERTIES TIMEOUT 20)
 
+add_executable(coretrace_logger_test_sink_swap_waits test_sink_swap_waits.cpp)
+target_link_libraries(coretrace_logger_test_sink_swap_waits PRIVATE coretrace_logger)
+add_test(NAME coretrace_logger.test_sink_swap_waits COMMAND coretrace_logger_test_sink_swap_waits)
+set_tests_properties(coretrace_logger.test_sink_swap_waits PROPERTIES TIMEOUT 20)
+
 if(UNIX)
   add_test(NAME coretrace_logger.test_build_clean_guard
     COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/test_build_clean_guard.sh"
