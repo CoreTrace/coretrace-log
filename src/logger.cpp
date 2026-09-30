@@ -281,16 +281,20 @@ void init_from_env() {
     if (env_debug && env_debug[0] != '\0') {
       StateLockGuard guard;
 
-      // Parse comma-separated module names.
+      // Parse comma-separated module names, ignoring spaces around them.
       const char *start = env_debug;
       while (*start) {
         const char *end = start;
         while (*end && *end != ',')
           ++end;
 
-        size_t len = static_cast<size_t>(end - start);
-        if (len > 0 && len < MODULE_NAME_LEN)
-          add_module_locked(std::string_view(start, len));
+        std::string_view name(start, static_cast<size_t>(end - start));
+        const size_t first = name.find_first_not_of(" \t");
+        if (first != std::string_view::npos) {
+          name = name.substr(first, name.find_last_not_of(" \t") - first + 1);
+          if (name.size() < MODULE_NAME_LEN)
+            add_module_locked(name);
+        }
 
         start = *end ? end + 1 : end;
       }
