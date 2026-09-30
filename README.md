@@ -153,6 +153,8 @@ coretrace::enable_all_modules();  // Clear filter, everything passes
 
 `disable_module()` never lets more messages through: after the last enabled module is disabled, tagged messages stay filtered until `enable_all_modules()`.
 
+The filter holds up to 32 module names of at most 31 characters. `enable_module()` returns `false` for a name it cannot store, and `CT_DEBUG` skips such names.
+
 Or via environment variable:
 ```bash
 CT_DEBUG=alloc,trace ./my_program

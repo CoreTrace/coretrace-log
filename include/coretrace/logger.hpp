@@ -140,10 +140,13 @@ void set_min_level(Level level);
 /// calls with a Module tag pass only for enabled names, until
 /// enable_all_modules() clears the filter. Calls without a Module tag always
 /// pass the module filter.
-/// Module names are case-sensitive and stored in a fixed-size table.
-/// Env var CT_DEBUG=mod1,mod2,... is used as a startup default only.
+/// Module names are case-sensitive and stored in a fixed-size table of at
+/// most 32 names of at most 31 characters. Returns false, without enabling
+/// anything, for an empty or longer name or when the table is full.
+/// Env var CT_DEBUG=mod1,mod2,... is used as a startup default only, and skips
+/// the names that do not fit the same limits.
 /// Explicit API calls always take precedence.
-void enable_module(std::string_view name);
+bool enable_module(std::string_view name);
 
 /// Disable a previously enabled module. The filter stays active, even when no
 /// module is left, so disabling a module never lets more messages through.
