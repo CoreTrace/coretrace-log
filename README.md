@@ -10,6 +10,15 @@ A minimal, fast, and thread-safe C++20 logging library with colored terminal out
 - Custom sink support (redirect to file, buffer, syslog, etc.)
 - Small: about 1,300 lines, including the POSIX and Windows backends
 
+## Repository documents
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- [AUTHORS.md](AUTHORS.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [LICENSE](LICENSE)
+- [SECURITY.md](SECURITY.md)
+
 ## Quick start
 
 ```cpp
