@@ -5,6 +5,8 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 ## Unreleased
 
 - Added repository contribution, conduct and security documentation.
+- A child of `fork()` no longer hangs on its first colored line when another thread of the
+  parent was deciding whether stderr takes colors at the time of the fork.
 
 ## v1.1.0
 
