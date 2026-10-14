@@ -130,15 +130,22 @@ struct PrefixSnapshot {
 
 // ── Color detection ──────────────────────
 
+// Whether stderr takes colors, decided once: 0 until then, 1 for no, 2 for yes.
+// Not a function-local static: a child of fork() would inherit its
+// initialization guard as taken when another thread of the parent was deciding
+// at the time of the fork, and wait for it forever. Two threads may decide at
+// once; they reach the same answer.
+std::atomic<int> g_color_decision{0};
+
 [[nodiscard]] bool use_color() {
-  static const bool enabled = []() {
-    if (env_var("NO_COLOR") != nullptr)
-      return false;
-
-    return platform::stderr_supports_color();
-  }();
-
-  return enabled;
+  int decision = g_color_decision.load(std::memory_order_acquire);
+  if (decision == 0) {
+    const bool enabled =
+        env_var("NO_COLOR") == nullptr && platform::stderr_supports_color();
+    decision = enabled ? 2 : 1;
+    g_color_decision.store(decision, std::memory_order_release);
+  }
+  return decision == 2;
 }
 
 // ── String helpers ───────────────────────
