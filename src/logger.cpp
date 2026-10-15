@@ -143,8 +143,10 @@ static_assert(std::atomic<ColorDecision>::is_always_lock_free);
 [[nodiscard]] bool use_color() {
   ColorDecision decision = g_color_decision.load(std::memory_order_acquire);
   if (decision == ColorDecision::Undecided) {
-    const bool enabled =
-        env_var("NO_COLOR") == nullptr && platform::stderr_supports_color();
+    // NO_COLOR disables the colors when it is not empty (no-color.org).
+    const char *no_color = env_var("NO_COLOR");
+    const bool enabled = (no_color == nullptr || no_color[0] == '\0') &&
+                         platform::stderr_supports_color();
     ColorDecision expected = ColorDecision::Undecided;
     decision = enabled ? ColorDecision::On : ColorDecision::Off;
     if (!g_color_decision.compare_exchange_strong(expected, decision,

@@ -230,7 +230,7 @@ coretrace::log(Level::Info, "{}bold{} and {}red{}\n",
     coretrace::color(Color::Reset));
 ```
 
-Colors are automatically disabled when stderr is not a terminal or when `NO_COLOR` is set.
+Colors are automatically disabled when stderr is not a terminal or when `NO_COLOR` is set to a non-empty value.
 
 ### Low-level API
 
@@ -252,7 +252,7 @@ These functions write straight to the sink: unlike `log()`, they are not seriali
 |----------|--------|-------------|
 | `CT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` (case-insensitive) | Set startup default minimum log level. Other values mean `info` |
 | `CT_DEBUG` | comma-separated names | Set startup default enabled modules. Spaces around names are ignored |
-| `NO_COLOR` | any value | Disable ANSI color output |
+| `NO_COLOR` | any non-empty value | Disable ANSI color output |
 
 ## Output format
 
