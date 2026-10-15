@@ -1,7 +1,8 @@
 // A child of fork() can use the colors although another thread of the parent
 // was deciding them at the time of the fork: the child decides them again,
 // instead of waiting for a decision that no thread of the child will ever
-// finish.
+// finish. In the parent, the first decision stored holds for every thread, and
+// later calls do not decide again.
 
 #include "check.hpp"
 
@@ -11,11 +12,13 @@
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <string_view>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
 
 extern std::atomic<bool> g_deciding_colors;
+extern std::atomic<int> g_isatty_calls;
 
 namespace {
 
@@ -54,7 +57,12 @@ int main() {
   unsetenv("NO_COLOR");
   std::signal(SIGCHLD, SIG_DFL);
 
-  std::thread decider([] { (void)coretrace::color(coretrace::Color::Red); });
+  using coretrace::Color;
+
+  // The decider is told stderr is a terminal, after the main thread is told it
+  // is not: the main thread's decision is stored first.
+  std::string_view decider_red;
+  std::thread decider([&] { decider_red = coretrace::color(Color::Red); });
   const bool deciding = wait_for_decision();
   CHECK(deciding);
   if (!deciding) {
@@ -64,10 +72,17 @@ int main() {
 
   const pid_t child = fork();
   if (child == 0) {
-    (void)coretrace::color(coretrace::Color::Red);
+    (void)coretrace::color(Color::Red);
     _exit(0);
   }
+  const std::string_view main_red = coretrace::color(Color::Red);
   decider.join();
+  CHECK(decider_red == main_red);
+
+  const int calls = g_isatty_calls.load();
+  CHECK(coretrace::color(Color::Red) == main_red);
+  CHECK(g_isatty_calls.load() == calls);
+
   CHECK(child > 0);
   if (child <= 0)
     return ct_test::result();
