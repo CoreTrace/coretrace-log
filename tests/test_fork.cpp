@@ -1,8 +1,8 @@
 // fork() while threads of the parent use the logger: the child can log. fork()
 // waits for the logger's initialization and for a line another thread is
 // writing, so the child inherits neither half done; a sink can fork and its
-// child still log; other fork handlers can still log; and the child's lines
-// carry the child's pid.
+// child still log; other fork handlers can still log; fork() still works while
+// the program exits; and the child's lines carry the child's pid.
 
 #include "check.hpp"
 #include "fork_helpers.hpp"
@@ -13,6 +13,8 @@
 #include <chrono>
 #include <csignal>
 #include <cstddef>
+#include <cstdio>
+#include <cstdlib>
 #include <pthread.h>
 #include <string>
 #include <string_view>
@@ -133,10 +135,25 @@ void check_logging_from_fork_handlers() {
   coretrace::reset_sink();
 }
 
+void fork_at_exit() {
+  const pid_t child = fork();
+  if (child == 0)
+    _exit(0);
+  if (!ct_test::child_succeeded(child)) {
+    std::fputs("fork() at exit failed\n", stderr);
+    _exit(1);
+  }
+}
+
+// Registered by this translation unit's initialization, which runs before the
+// logger's: fork_at_exit() runs after the logger's static destructors.
+const bool g_fork_at_exit_registered = std::atexit(fork_at_exit) == 0;
+
 } // namespace
 
 int main() {
   std::signal(SIGCHLD, SIG_DFL);
+  CHECK(g_fork_at_exit_registered);
   check_fork_initializes();
   check_child_pid();
   coretrace::set_min_level(Level::Info);
