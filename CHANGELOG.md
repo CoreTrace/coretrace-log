@@ -11,6 +11,8 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 - A child of `fork()` logs its own pid instead of the parent's.
 - An empty `NO_COLOR` no longer disables colors, as no-color.org specifies.
 
+[Full v1.1.1 notes](https://github.com/CoreTrace/coretrace-log/releases/tag/v1.1.1).
+
 ## v1.1.0
 
 - Logging to sinks is serialized, including format-error fallback and sink changes.
