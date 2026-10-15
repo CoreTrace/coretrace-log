@@ -130,22 +130,28 @@ struct PrefixSnapshot {
 
 // ── Color detection ──────────────────────
 
-// Whether stderr takes colors, decided once: 0 until then, 1 for no, 2 for yes.
-// Not a function-local static: a child of fork() would inherit its
-// initialization guard as taken when another thread of the parent was deciding
-// at the time of the fork, and wait for it forever. Two threads may decide at
-// once; they reach the same answer.
-std::atomic<int> g_color_decision{0};
+enum class ColorDecision { Undecided, Off, On };
+
+// Whether stderr takes colors, decided once per process. Not a function-local
+// static: a child of fork() would inherit its initialization guard as taken
+// when another thread of the parent was deciding at the time of the fork, and
+// wait for it forever. Lock-free for the same reason. Two threads may decide at
+// once: the first decision stored holds for both.
+std::atomic<ColorDecision> g_color_decision{ColorDecision::Undecided};
+static_assert(std::atomic<ColorDecision>::is_always_lock_free);
 
 [[nodiscard]] bool use_color() {
-  int decision = g_color_decision.load(std::memory_order_acquire);
-  if (decision == 0) {
+  ColorDecision decision = g_color_decision.load(std::memory_order_acquire);
+  if (decision == ColorDecision::Undecided) {
     const bool enabled =
         env_var("NO_COLOR") == nullptr && platform::stderr_supports_color();
-    decision = enabled ? 2 : 1;
-    g_color_decision.store(decision, std::memory_order_release);
+    ColorDecision expected = ColorDecision::Undecided;
+    decision = enabled ? ColorDecision::On : ColorDecision::Off;
+    if (!g_color_decision.compare_exchange_strong(expected, decision,
+                                                  std::memory_order_acq_rel))
+      decision = expected;
   }
-  return decision == 2;
+  return decision == ColorDecision::On;
 }
 
 // ── String helpers ───────────────────────
