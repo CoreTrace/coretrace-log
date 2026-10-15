@@ -65,7 +65,7 @@ if(UNIX)
   # fork() while another thread decides the colors: the test redefines isatty(), which the
   # logger calls then, to make that decision last.
   add_executable(coretrace_logger_test_fork_color test_fork_color.cpp fork_color_isatty.cpp)
-  target_link_libraries(coretrace_logger_test_fork_color PRIVATE coretrace_logger Threads::Threads)
+  target_link_libraries(coretrace_logger_test_fork_color PRIVATE coretrace_logger)
   add_test(NAME coretrace_logger.test_fork_color COMMAND coretrace_logger_test_fork_color)
   set_tests_properties(coretrace_logger.test_fork_color PROPERTIES TIMEOUT 20)
 endif()

@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstdlib>
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
@@ -18,12 +19,12 @@ extern std::atomic<bool> g_deciding_colors;
 
 namespace {
 
-constexpr std::chrono::seconds kChildTimeout{5};
+constexpr std::chrono::seconds kTimeout{5};
 
 // True when `child` exited, with its status in `status`; a child still running
-// after kChildTimeout is killed.
+// after kTimeout is killed.
 bool reap(pid_t child, int &status) {
-  const auto deadline = std::chrono::steady_clock::now() + kChildTimeout;
+  const auto deadline = std::chrono::steady_clock::now() + kTimeout;
   while (std::chrono::steady_clock::now() < deadline) {
     if (waitpid(child, &status, WNOHANG) == child)
       return true;
@@ -34,11 +35,31 @@ bool reap(pid_t child, int &status) {
   return false;
 }
 
+// True once the logger is deciding the colors, false after kTimeout.
+bool wait_for_decision() {
+  const auto deadline = std::chrono::steady_clock::now() + kTimeout;
+  while (!g_deciding_colors.load()) {
+    if (std::chrono::steady_clock::now() >= deadline)
+      return false;
+    std::this_thread::yield();
+  }
+  return true;
+}
+
 } // namespace
 
 int main() {
+  // The logger decides without isatty() under NO_COLOR, and waitpid() cannot
+  // reap a child when SIGCHLD is ignored: both may come from the environment.
+  unsetenv("NO_COLOR");
+  std::signal(SIGCHLD, SIG_DFL);
+
   std::thread decider([] { (void)coretrace::color(coretrace::Color::Red); });
-  while (!g_deciding_colors.load()) {
+  const bool deciding = wait_for_decision();
+  CHECK(deciding);
+  if (!deciding) {
+    decider.join();
+    return ct_test::result();
   }
 
   const pid_t child = fork();
