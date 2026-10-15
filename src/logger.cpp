@@ -51,12 +51,22 @@ std::atomic<int> g_modules_set_explicitly{0};
 // fork() cannot release: it checks the id of its owner, and the child's thread
 // has another one.
 
+// Never destroyed: fork() takes the locks even while the program exits, from an
+// atexit() handler or a static destructor that runs after this file's.
+template <typename T> union Immortal {
+  T value;
+  constexpr Immortal() : value() {}
+  ~Immortal() {}
+};
+
 // Protects mutable logger state (prefix + modules table).
-std::mutex g_state_mutex;
+Immortal<std::mutex> g_state_lock;
+std::mutex &g_state_mutex = g_state_lock.value;
 thread_local int t_state_depth = 0;
 
 // Protects atomicity of one log line output when thread-safe mode is on.
-std::mutex g_output_mutex;
+Immortal<std::mutex> g_output_lock;
+std::mutex &g_output_mutex = g_output_lock.value;
 thread_local int t_output_depth = 0;
 std::atomic<int> g_thread_safe{1}; // enabled by default
 
