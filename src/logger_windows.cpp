@@ -86,4 +86,6 @@ void write_stderr(const char *data, size_t size) {
   return true;
 }
 
+void at_fork(void (*)(), void (*)()) {}
+
 } // namespace coretrace::platform

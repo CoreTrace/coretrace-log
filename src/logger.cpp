@@ -49,7 +49,11 @@ std::atomic<int> g_modules_set_explicitly{0};
 std::mutex g_state_mutex;
 
 // Protects atomicity of one log line output when thread-safe mode is on.
-std::recursive_mutex g_output_mutex;
+// t_output_depth counts the guards of the thread that holds it, so that a sink
+// can log: not a std::recursive_mutex, which a child of fork() cannot release,
+// since it checks the id of its owner, and the child's thread has another one.
+std::mutex g_output_mutex;
+thread_local int t_output_depth = 0;
 std::atomic<int> g_thread_safe{1}; // enabled by default
 
 // ── Sink ─────────────────────────────────
@@ -81,12 +85,12 @@ struct StateLockGuard {
 struct OutputLockGuard {
   OutputLockGuard()
       : locked(g_thread_safe.load(std::memory_order_acquire) != 0) {
-    if (locked)
+    if (locked && t_output_depth++ == 0)
       g_output_mutex.lock();
   }
 
   ~OutputLockGuard() {
-    if (locked)
+    if (locked && --t_output_depth == 0)
       g_output_mutex.unlock();
   }
 
@@ -95,6 +99,29 @@ struct OutputLockGuard {
 
   bool locked;
 };
+
+// ── Fork ─────────────────────────────────
+
+// A child of fork() has only the thread that forked. So that it inherits
+// neither a lock nor the initialization taken by another thread of the parent,
+// fork() waits for them: the forking thread finishes the initialization, then
+// takes the locks, in the order of a sink that logs, and releases them in both
+// processes.
+void before_fork() {
+  init_once();
+  if (t_output_depth == 0)
+    g_output_mutex.lock();
+  g_state_mutex.lock();
+}
+
+void after_fork() {
+  g_state_mutex.unlock();
+  if (t_output_depth == 0)
+    g_output_mutex.unlock();
+}
+
+[[maybe_unused]] const bool g_fork_handlers_registered =
+    (platform::at_fork(before_fork, after_fork), true);
 
 struct PrefixSnapshot {
   char value[sizeof(g_prefix_buf)];

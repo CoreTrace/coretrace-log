@@ -20,6 +20,9 @@ void write_stderr(const char *data, size_t size);
 [[nodiscard]] int process_id();
 [[nodiscard]] unsigned long long current_thread_id();
 [[nodiscard]] bool utc_timestamp(UtcTimestamp &out);
+// Makes fork() call `before` first, in the thread that forks, and `after` then,
+// in that thread of the parent and of the child. Does nothing without fork().
+void at_fork(void (*before)(), void (*after)());
 
 } // namespace coretrace::platform
 
