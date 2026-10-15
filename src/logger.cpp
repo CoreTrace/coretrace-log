@@ -602,10 +602,8 @@ void set_source_location(bool enabled) {
 //  System info
 // ####################################
 
-[[nodiscard]] int pid() {
-  static const int cached = platform::process_id();
-  return cached;
-}
+// Not cached: a child of fork() has its own pid.
+[[nodiscard]] int pid() { return platform::process_id(); }
 
 [[nodiscard]] unsigned long long thread_id() {
   return platform::current_thread_id();

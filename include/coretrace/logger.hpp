@@ -241,7 +241,7 @@ void write_hex(uintptr_t value);
 //  System info
 // #######################################
 
-/// Return the cached process ID.
+/// Return the process ID.
 [[nodiscard]] int pid();
 
 /// Return the current thread ID (platform-specific).
