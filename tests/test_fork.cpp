@@ -1,7 +1,8 @@
 // fork() while threads of the parent use the logger: the child can log. fork()
 // waits for the logger's initialization and for a line another thread is
 // writing, so the child inherits neither half done; a sink can fork and its
-// child still log; and the child's lines carry the child's pid.
+// child still log; other fork handlers can still log; and the child's lines
+// carry the child's pid.
 
 #include "check.hpp"
 #include "fork_helpers.hpp"
@@ -12,6 +13,8 @@
 #include <chrono>
 #include <csignal>
 #include <cstddef>
+#include <pthread.h>
+#include <string>
 #include <string_view>
 #include <thread>
 #include <unistd.h>
@@ -93,6 +96,43 @@ void check_fork_from_sink() {
   CHECK(ct_test::child_succeeded(g_sink_child));
 }
 
+std::atomic<bool> g_log_from_fork_handlers{false};
+
+void log_from_fork_handler() {
+  if (!g_log_from_fork_handlers.load())
+    return;
+  coretrace::log(Level::Info, "from a fork handler\n");
+  coretrace::set_sink(ct_test::capture_sink);
+}
+
+// Registered by this translation unit's initialization, which runs before the
+// logger's: fork() calls the prepare handler after the logger's, and the
+// parent and child handlers before the logger's, while the forking thread holds
+// the logger's locks.
+const bool g_fork_handlers_registered =
+    pthread_atfork(log_from_fork_handler, log_from_fork_handler,
+                   log_from_fork_handler) == 0;
+
+void check_logging_from_fork_handlers() {
+  CHECK(g_fork_handlers_registered);
+  coretrace::set_sink(ct_test::capture_sink);
+  const size_t from = ct_test::captured.size();
+  g_log_from_fork_handlers = true;
+  alarm(5); // A fork() that hangs in a handler kills the test.
+  const pid_t child = fork();
+  if (child == 0)
+    _exit(0);
+  alarm(0);
+  g_log_from_fork_handlers = false;
+  CHECK(ct_test::child_succeeded(child));
+
+  // One line from the prepare handler, one from the parent handler.
+  constexpr std::string_view line = "from a fork handler";
+  const size_t first = ct_test::captured.find(line, from);
+  CHECK(first != std::string::npos && ct_test::logged(line, first + 1));
+  coretrace::reset_sink();
+}
+
 } // namespace
 
 int main() {
@@ -103,5 +143,6 @@ int main() {
   coretrace::enable_logging();
   check_fork_while_writing();
   check_fork_from_sink();
+  check_logging_from_fork_handlers();
   return ct_test::result();
 }
