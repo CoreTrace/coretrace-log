@@ -45,13 +45,17 @@ std::atomic<int> g_modules_set_explicitly{0};
 
 // ── Synchronization ──────────────────────
 
+// Both locks are reentrant: a thread takes a lock only when its count for that
+// lock goes from 0 to 1, so that a sink, or a fork handler, can call the logger
+// while the thread holds them. Not std::recursive_mutex, which a child of
+// fork() cannot release: it checks the id of its owner, and the child's thread
+// has another one.
+
 // Protects mutable logger state (prefix + modules table).
 std::mutex g_state_mutex;
+thread_local int t_state_depth = 0;
 
 // Protects atomicity of one log line output when thread-safe mode is on.
-// t_output_depth counts the guards of the thread that holds it, so that a sink
-// can log: not a std::recursive_mutex, which a child of fork() cannot release,
-// since it checks the id of its owner, and the child's thread has another one.
 std::mutex g_output_mutex;
 thread_local int t_output_depth = 0;
 std::atomic<int> g_thread_safe{1}; // enabled by default
@@ -74,9 +78,20 @@ std::once_flag g_init_once;
 
 // ── Small lock guards ────────────────────
 
+void lock_reentrant(std::mutex &mutex, int &depth) {
+  if (depth == 0)
+    mutex.lock();
+  ++depth;
+}
+
+void unlock_reentrant(std::mutex &mutex, int &depth) {
+  if (--depth == 0)
+    mutex.unlock();
+}
+
 struct StateLockGuard {
-  StateLockGuard() { g_state_mutex.lock(); }
-  ~StateLockGuard() { g_state_mutex.unlock(); }
+  StateLockGuard() { lock_reentrant(g_state_mutex, t_state_depth); }
+  ~StateLockGuard() { unlock_reentrant(g_state_mutex, t_state_depth); }
 
   StateLockGuard(const StateLockGuard &) = delete;
   StateLockGuard &operator=(const StateLockGuard &) = delete;
@@ -85,13 +100,13 @@ struct StateLockGuard {
 struct OutputLockGuard {
   OutputLockGuard()
       : locked(g_thread_safe.load(std::memory_order_acquire) != 0) {
-    if (locked && t_output_depth++ == 0)
-      g_output_mutex.lock();
+    if (locked)
+      lock_reentrant(g_output_mutex, t_output_depth);
   }
 
   ~OutputLockGuard() {
-    if (locked && --t_output_depth == 0)
-      g_output_mutex.unlock();
+    if (locked)
+      unlock_reentrant(g_output_mutex, t_output_depth);
   }
 
   OutputLockGuard(const OutputLockGuard &) = delete;
@@ -106,18 +121,17 @@ struct OutputLockGuard {
 // neither a lock nor the initialization taken by another thread of the parent,
 // fork() waits for them: the forking thread finishes the initialization, then
 // takes the locks, in the order of a sink that logs, and releases them in both
-// processes.
+// processes. Other fork handlers run in between, in the forking thread: since
+// the locks count as held by it, they can call the logger.
 void before_fork() {
   init_once();
-  if (t_output_depth == 0)
-    g_output_mutex.lock();
-  g_state_mutex.lock();
+  lock_reentrant(g_output_mutex, t_output_depth);
+  lock_reentrant(g_state_mutex, t_state_depth);
 }
 
 void after_fork() {
-  g_state_mutex.unlock();
-  if (t_output_depth == 0)
-    g_output_mutex.unlock();
+  unlock_reentrant(g_state_mutex, t_state_depth);
+  unlock_reentrant(g_output_mutex, t_output_depth);
 }
 
 [[maybe_unused]] const bool g_fork_handlers_registered =
