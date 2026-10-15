@@ -70,6 +70,11 @@ if(UNIX)
   target_link_libraries(coretrace_logger_test_fork_color PRIVATE coretrace_logger)
   add_test(NAME coretrace_logger.test_fork_color COMMAND coretrace_logger_test_fork_color)
   set_tests_properties(coretrace_logger.test_fork_color PROPERTIES TIMEOUT 20)
+
+  add_executable(coretrace_logger_test_fork test_fork.cpp)
+  target_link_libraries(coretrace_logger_test_fork PRIVATE coretrace_logger)
+  add_test(NAME coretrace_logger.test_fork COMMAND coretrace_logger_test_fork)
+  set_tests_properties(coretrace_logger.test_fork PROPERTIES TIMEOUT 30)
 endif()
 
 add_executable(coretrace_logger_test_sink_reentrancy test_sink_reentrancy.cpp)

@@ -5,55 +5,23 @@
 // later calls do not decide again.
 
 #include "check.hpp"
+#include "fork_helpers.hpp"
 
 #include <coretrace/logger.hpp>
 
 #include <atomic>
-#include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <string_view>
-#include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
 
 extern std::atomic<bool> g_deciding_colors;
 extern std::atomic<int> g_isatty_calls;
 
-namespace {
-
-constexpr std::chrono::seconds kTimeout{5};
-
-// True when `child` exited, with its status in `status`; a child still running
-// after kTimeout is killed.
-bool reap(pid_t child, int &status) {
-  const auto deadline = std::chrono::steady_clock::now() + kTimeout;
-  while (std::chrono::steady_clock::now() < deadline) {
-    if (waitpid(child, &status, WNOHANG) == child)
-      return true;
-    usleep(1000);
-  }
-  kill(child, SIGKILL);
-  waitpid(child, &status, 0);
-  return false;
-}
-
-// True once the logger is deciding the colors, false after kTimeout.
-bool wait_for_decision() {
-  const auto deadline = std::chrono::steady_clock::now() + kTimeout;
-  while (!g_deciding_colors.load()) {
-    if (std::chrono::steady_clock::now() >= deadline)
-      return false;
-    std::this_thread::yield();
-  }
-  return true;
-}
-
-} // namespace
-
 int main() {
-  // The logger decides without isatty() under NO_COLOR, and waitpid() cannot
-  // reap a child when SIGCHLD is ignored: both may come from the environment.
+  // The logger decides without isatty() under NO_COLOR, which may come from
+  // the environment.
   unsetenv("NO_COLOR");
   std::signal(SIGCHLD, SIG_DFL);
 
@@ -63,7 +31,7 @@ int main() {
   // is not: the main thread's decision is stored first.
   std::string_view decider_red;
   std::thread decider([&] { decider_red = coretrace::color(Color::Red); });
-  const bool deciding = wait_for_decision();
+  const bool deciding = ct_test::wait_for(g_deciding_colors);
   CHECK(deciding);
   if (!deciding) {
     decider.join();
@@ -83,13 +51,6 @@ int main() {
   CHECK(coretrace::color(Color::Red) == main_red);
   CHECK(g_isatty_calls.load() == calls);
 
-  CHECK(child > 0);
-  if (child <= 0)
-    return ct_test::result();
-
-  int status = 0;
-  const bool exited = reap(child, status);
-  CHECK(exited);
-  CHECK(exited && WIFEXITED(status) && WEXITSTATUS(status) == 0);
+  CHECK(ct_test::child_succeeded(child));
   return ct_test::result();
 }
