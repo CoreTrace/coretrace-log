@@ -2,7 +2,7 @@
 
 Notable changes are grouped by release. See [all releases](https://github.com/CoreTrace/coretrace-log/releases) for older versions.
 
-## Unreleased
+## v1.1.1
 
 - Added repository contribution, conduct and security documentation.
 - A child of `fork()` no longer hangs on its first line when another thread of the parent was
