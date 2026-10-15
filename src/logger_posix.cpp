@@ -62,4 +62,8 @@ void write_stderr(const char *data, size_t size) {
   return true;
 }
 
+void at_fork(void (*before)(), void (*after)()) {
+  (void)pthread_atfork(before, after, after);
+}
+
 } // namespace coretrace::platform

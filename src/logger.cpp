@@ -45,11 +45,29 @@ std::atomic<int> g_modules_set_explicitly{0};
 
 // ── Synchronization ──────────────────────
 
+// Both locks are reentrant: a thread takes a lock only when its count for that
+// lock goes from 0 to 1, so that a sink, or a fork handler, can call the logger
+// while the thread holds them. Not std::recursive_mutex, which a child of
+// fork() cannot release: it checks the id of its owner, and the child's thread
+// has another one.
+
+// Never destroyed: fork() takes the locks even while the program exits, from an
+// atexit() handler or a static destructor that runs after this file's.
+template <typename T> union Immortal {
+  T value;
+  constexpr Immortal() : value() {}
+  ~Immortal() {}
+};
+
 // Protects mutable logger state (prefix + modules table).
-std::mutex g_state_mutex;
+Immortal<std::mutex> g_state_lock;
+std::mutex &g_state_mutex = g_state_lock.value;
+thread_local int t_state_depth = 0;
 
 // Protects atomicity of one log line output when thread-safe mode is on.
-std::recursive_mutex g_output_mutex;
+Immortal<std::mutex> g_output_lock;
+std::mutex &g_output_mutex = g_output_lock.value;
+thread_local int t_output_depth = 0;
 std::atomic<int> g_thread_safe{1}; // enabled by default
 
 // ── Sink ─────────────────────────────────
@@ -70,9 +88,20 @@ std::once_flag g_init_once;
 
 // ── Small lock guards ────────────────────
 
+void lock_reentrant(std::mutex &mutex, int &depth) {
+  if (depth == 0)
+    mutex.lock();
+  ++depth;
+}
+
+void unlock_reentrant(std::mutex &mutex, int &depth) {
+  if (--depth == 0)
+    mutex.unlock();
+}
+
 struct StateLockGuard {
-  StateLockGuard() { g_state_mutex.lock(); }
-  ~StateLockGuard() { g_state_mutex.unlock(); }
+  StateLockGuard() { lock_reentrant(g_state_mutex, t_state_depth); }
+  ~StateLockGuard() { unlock_reentrant(g_state_mutex, t_state_depth); }
 
   StateLockGuard(const StateLockGuard &) = delete;
   StateLockGuard &operator=(const StateLockGuard &) = delete;
@@ -82,12 +111,12 @@ struct OutputLockGuard {
   OutputLockGuard()
       : locked(g_thread_safe.load(std::memory_order_acquire) != 0) {
     if (locked)
-      g_output_mutex.lock();
+      lock_reentrant(g_output_mutex, t_output_depth);
   }
 
   ~OutputLockGuard() {
     if (locked)
-      g_output_mutex.unlock();
+      unlock_reentrant(g_output_mutex, t_output_depth);
   }
 
   OutputLockGuard(const OutputLockGuard &) = delete;
@@ -95,6 +124,28 @@ struct OutputLockGuard {
 
   bool locked;
 };
+
+// ── Fork ─────────────────────────────────
+
+// A child of fork() has only the thread that forked. So that it inherits
+// neither a lock nor the initialization taken by another thread of the parent,
+// fork() waits for them: the forking thread finishes the initialization, then
+// takes the locks, in the order of a sink that logs, and releases them in both
+// processes. Other fork handlers run in between, in the forking thread: since
+// the locks count as held by it, they can call the logger.
+void before_fork() {
+  init_once();
+  lock_reentrant(g_output_mutex, t_output_depth);
+  lock_reentrant(g_state_mutex, t_state_depth);
+}
+
+void after_fork() {
+  unlock_reentrant(g_state_mutex, t_state_depth);
+  unlock_reentrant(g_output_mutex, t_output_depth);
+}
+
+[[maybe_unused]] const bool g_fork_handlers_registered =
+    (platform::at_fork(before_fork, after_fork), true);
 
 struct PrefixSnapshot {
   char value[sizeof(g_prefix_buf)];
@@ -130,15 +181,30 @@ struct PrefixSnapshot {
 
 // ── Color detection ──────────────────────
 
+enum class ColorDecision { Undecided, Off, On };
+
+// Whether stderr takes colors, decided once per process. Not a function-local
+// static: a child of fork() would inherit its initialization guard as taken
+// when another thread of the parent was deciding at the time of the fork, and
+// wait for it forever. Lock-free for the same reason. Two threads may decide at
+// once: the first decision stored holds for both.
+std::atomic<ColorDecision> g_color_decision{ColorDecision::Undecided};
+static_assert(std::atomic<ColorDecision>::is_always_lock_free);
+
 [[nodiscard]] bool use_color() {
-  static const bool enabled = []() {
-    if (env_var("NO_COLOR") != nullptr)
-      return false;
-
-    return platform::stderr_supports_color();
-  }();
-
-  return enabled;
+  ColorDecision decision = g_color_decision.load(std::memory_order_acquire);
+  if (decision == ColorDecision::Undecided) {
+    // NO_COLOR disables the colors when it is not empty (no-color.org).
+    const char *no_color = env_var("NO_COLOR");
+    const bool enabled = (no_color == nullptr || no_color[0] == '\0') &&
+                         platform::stderr_supports_color();
+    ColorDecision expected = ColorDecision::Undecided;
+    decision = enabled ? ColorDecision::On : ColorDecision::Off;
+    if (!g_color_decision.compare_exchange_strong(expected, decision,
+                                                  std::memory_order_acq_rel))
+      decision = expected;
+  }
+  return decision == ColorDecision::On;
 }
 
 // ── String helpers ───────────────────────
@@ -587,10 +653,8 @@ void set_source_location(bool enabled) {
 //  System info
 // ####################################
 
-[[nodiscard]] int pid() {
-  static const int cached = platform::process_id();
-  return cached;
-}
+// Not cached: a child of fork() has its own pid.
+[[nodiscard]] int pid() { return platform::process_id(); }
 
 [[nodiscard]] unsigned long long thread_id() {
   return platform::current_thread_id();

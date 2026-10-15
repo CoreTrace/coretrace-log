@@ -5,6 +5,11 @@ Notable changes are grouped by release. See [all releases](https://github.com/Co
 ## Unreleased
 
 - Added repository contribution, conduct and security documentation.
+- A child of `fork()` no longer hangs on its first line when another thread of the parent was
+  deciding whether stderr takes colors, writing a line or initializing the logger at the time of
+  the fork: `fork()` waits for the line and the initialization.
+- A child of `fork()` logs its own pid instead of the parent's.
+- An empty `NO_COLOR` no longer disables colors, as no-color.org specifies.
 
 ## v1.1.0
 

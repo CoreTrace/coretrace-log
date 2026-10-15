@@ -40,12 +40,16 @@ int attach_pty_to_stderr() {
 } // namespace
 
 // The logger decides once per process whether stderr gets colors, so ctest
-// runs one process with NO_COLOR=1 ("no_color") and one without it.
+// runs one process with NO_COLOR=1 ("no_color"), one with NO_COLOR empty
+// ("empty_no_color"), which leaves the colors on, and one without it.
 int main(int argc, char **argv) {
   using namespace coretrace;
 
-  const bool no_color = argc > 1 && std::string_view(argv[1]) == "no_color";
-  if (!no_color)
+  const std::string_view mode = argc > 1 ? argv[1] : "";
+  const bool no_color = mode == "no_color";
+  if (mode == "empty_no_color")
+    CHECK(ct_test::set_env("NO_COLOR", ""));
+  else if (!no_color)
     unsetenv("NO_COLOR");
 
   set_sink(ct_test::capture_sink);

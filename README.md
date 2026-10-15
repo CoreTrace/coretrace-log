@@ -218,7 +218,9 @@ coretrace::set_thread_safe(true);   // Default: mutex-protected output
 coretrace::set_thread_safe(false);  // Disable for single-threaded hot paths
 ```
 
-In thread-safe mode, each line reaches the sink in a single call and never concurrently with another line. The mutex is recursive, so a sink may itself call `log()`, for example to report a write error. With `set_thread_safe(false)`, the sink can be called from several threads at once, and `set_sink()` no longer waits.
+In thread-safe mode, each line reaches the sink in a single call and never concurrently with another line. The lock is reentrant, so a sink may itself call `log()`, for example to report a write error. With `set_thread_safe(false)`, the sink can be called from several threads at once, and `set_sink()` no longer waits.
+
+On POSIX, `fork()` waits for a line another thread is writing, so the child can log, even when the parent's threads were logging at the time of the fork.
 
 ### Colors
 
@@ -230,7 +232,7 @@ coretrace::log(Level::Info, "{}bold{} and {}red{}\n",
     coretrace::color(Color::Reset));
 ```
 
-Colors are automatically disabled when stderr is not a terminal or when `NO_COLOR` is set.
+Colors are automatically disabled when stderr is not a terminal or when `NO_COLOR` is set to a non-empty value.
 
 ### Low-level API
 
@@ -240,7 +242,7 @@ coretrace::write_str("hello");             // Write string
 coretrace::write_dec(42);                  // Write decimal (no heap)
 coretrace::write_hex(0xDEAD);             // Write hex with 0x prefix
 coretrace::write_raw(buf, len);            // Write raw bytes
-coretrace::pid();                          // Cached PID
+coretrace::pid();                          // Process ID
 coretrace::thread_id();                    // Platform-specific TID
 ```
 
@@ -252,7 +254,9 @@ These functions write straight to the sink: unlike `log()`, they are not seriali
 |----------|--------|-------------|
 | `CT_LOG_LEVEL` | `debug`, `info`, `warn`, `error` (case-insensitive) | Set startup default minimum log level. Other values mean `info` |
 | `CT_DEBUG` | comma-separated names | Set startup default enabled modules. Spaces around names are ignored |
-| `NO_COLOR` | any value | Disable ANSI color output |
+| `NO_COLOR` | any non-empty value | Disable ANSI color output |
+
+`CT_LOG_LEVEL` and `CT_DEBUG` are read once, at the first logging call or, on POSIX, at the first `fork()`, whichever comes first.
 
 ## Output format
 
