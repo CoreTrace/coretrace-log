@@ -51,7 +51,7 @@ Output:
 include(FetchContent)
 FetchContent_Declare(coretrace-logger
   GIT_REPOSITORY https://github.com/CoreTrace/coretrace-log.git
-  GIT_TAG        v1.1.0
+  GIT_TAG        v1.1.1
 )
 FetchContent_MakeAvailable(coretrace-logger)
 
