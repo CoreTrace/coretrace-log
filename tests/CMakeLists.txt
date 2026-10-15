@@ -59,6 +59,8 @@ if(UNIX)
     COMMAND coretrace_logger_test_colors_tty no_color)
   set_tests_properties(coretrace_logger.test_colors_tty.no_color
     PROPERTIES ENVIRONMENT "NO_COLOR=1")
+  add_test(NAME coretrace_logger.test_colors_tty.empty_no_color
+    COMMAND coretrace_logger_test_colors_tty empty_no_color)
 endif()
 
 if(UNIX)
