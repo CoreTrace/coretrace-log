@@ -164,7 +164,7 @@ void enable_all_modules();
 
 /// Enable or disable mutex-based serialization of log output.
 /// Default: true (thread-safe). Each line then reaches the sink in one call,
-/// never concurrently with another line. The mutex is recursive, so a sink may
+/// never concurrently with another line. The lock is reentrant, so a sink may
 /// itself call log(). Set to false for single-threaded hot paths: the sink can
 /// then be called concurrently, and set_sink() does not wait.
 void set_thread_safe(bool enabled);
