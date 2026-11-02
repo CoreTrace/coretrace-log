@@ -2,6 +2,11 @@
 
 Notable changes are grouped by release. See [all releases](https://github.com/CoreTrace/coretrace-log/releases) for older versions.
 
+## Unreleased
+
+- The copyright line of `LICENSE` credits Hugo Payet and the CoreTrace contributors
+  instead of CTrace.
+
 ## v1.1.1
 
 - Added repository contribution, conduct and security documentation.
